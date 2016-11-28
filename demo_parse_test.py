@@ -1,37 +1,25 @@
-'''
-LaRiTy (nocheatz.com)
- 
-Help from   : https://developer.valvesoftware.com/wiki/DEM_Format#Demo_Header
-              http://hg.alliedmods.net/hl2sdks/hl2sdk-css/file/1901d5b74430/public/demofile/demoformat.h
- 
-Types sizes :
-Int : 4 bytes
-Float : 4 bytes
-String : 260 bytes
-'''
 import struct
 import socket
  
 class DemoInfo():
     def __init__(self):
-        self.dem_prot = None        # Demo protocol version 
-        self.net_prot = None        # Network protocol versio
-        self.host_name = None       # HOSTNAME in case of TV, and IP:PORT or localhost:PORT in case of RIE (Record In eyes).
-        self.client_name = None     # Client name or TV name.
-        self.map_name = None        # Map name
-        self.gamedir = None         # Root game directory
-        self.time = None            # Playback time (s)
-        self.ticks = None           # Number of ticks
-        self.frames = None          # Number of frames
-        self.tickrate = None        # Tickrate
-        self.demo_type = None       # TV or RIE ? (0 = RIE, 1 = TV)
-        self.status_present = None  # true if a status command is available in the demo.
+        self.dem_prot = None        # demo protocol version 
+        self.net_prot = None        # network protocol versio
+        self.host_name = None       # HOSTNAME in case of TV, and IP:PORT or localhost:PORT in case of record in eyes
+        self.client_name = None     # client name or TV name
+        self.map_name = None        # map name
+        self.gamedir = None         # root game directory
+        self.time = None            # playback time (s)
+        self.ticks = None           # number of ticks
+        self.frames = None          # number of frames
+        self.tickrate = None        # tickrate
+        self.demo_type = None       # 0=record in eye, 1 = TV
+        self.status_present = None  # true if a status command is available in the demo
 
 def readStr(demo_file, n=260):
     return demo_file.read(n).decode('utf-8').strip('\x00')
 
 def readInt(demo_file, n=4):
-    #val = ord(demo_file.read(n).decode('utf-8').strip('\x00'))
     val = struct.unpack('=i', demo_file.read(n))[0]
     return val
 
@@ -39,7 +27,7 @@ def readFloat(demo_file, n=4):
     return struct.unpack('=f', demo_file.read(n))[0]
  
 def IsGoodIPPORTFormat(ip_str):
-    '''is valid ip adress, does not need to be perfect'''
+    '''check for valid ip adress, does not need to be perfect'''
     ip_str = ip_str.replace('localhost', '127.0.0.1')
     try:
         socket.inet_aton(ip_str)
@@ -74,6 +62,9 @@ def getDemoInfo(pathtofile, fast = False): # BOOL fast : if true, doesn't check 
                     if "\x00status\x00" not in l:
                         infos.status_present = True
                         break
+            else:
+                l = demo_file.readline()
+                print(l)
         else:
             print("Bad file format.")
     return infos
