@@ -80,11 +80,12 @@ def read_cmd_header(demo_file):
 
 
 def read_raw_data(demo_file, length):
+    '''read a something (frame?) of bytes from the file'''
     size = read_int(demo_file)
 
-    buff = demo_file.read(size)
+    buf = demo_file.read(size)
 
-    return buff, size
+    return buf
 
 class bitbuf():
     '''parses or something'''
@@ -119,11 +120,8 @@ class bitbuf():
         '''get_num_bits_read, but returns bytes'''
         return (self.get_num_bytes_read() + 7) >> 3
 
-    def get_num_byte_left(self):
-        '''bytes left to be read'''
-        pass
 
-def parse_data_table(data):
+def parse_data_table(data_table_bytes):
     '''reads and parses a data table'''
 
 
@@ -145,11 +143,11 @@ def dump(demo_file):
             demo_finished = True
         elif tick == 4:
             '''console command, nothing seems to be saved'''
-            buff, size = read_raw_data(demo_file, 0)
+            buf = read_raw_data(demo_file, 0)
         elif tick == 6:
-            '''datatables, bitbuf library not finished'''
-            data, size = read_raw_data(demo_file, DEMO_BUFFER_SIZE)
-            #parse_data_table
+            '''datatables, somewhat confusing'''
+            data_table_bytes = io.BytesIO(read_raw_data(demo_file, DEMO_BUFFER_SIZE))
+            parse_data_table(data_table_bytes)
 
 
 def main():
