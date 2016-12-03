@@ -1,5 +1,6 @@
 import struct
 import socket
+import io
 
 DEMO_BUFFER_SIZE = 2 * 1024 * 1024
 
@@ -44,60 +45,46 @@ def get_demo_info(pathtofile = None, demo_file = None):
     '''reads the header of a demo_file, openening if necessary''' 
     infos = None
     
-    close_demo_file = False     # will only close if opened in this functoin
-
-    if demo_file is None:
-        demo_file = open(pathtofile, 'rb')
-        close_demo_file = True
-
-    try:
-        if readStr(demo_file, 8) == 'HL2DEMO':
-            infos = DemoInfo()
-            infos.dem_prot = read_int(demo_file)
-            infos.net_prot = read_int(demo_file)
-            infos.host_name = read_str(demo_file)
-            infos.client_name = read_str(demo_file)
-            infos.map_name = read_str(demo_file)
-            infos.gamedir = read_str(demo_file)
-            infos.time = read_float(demo_file)
-            infos.ticks = read_int(demo_file)
-            infos.frames = read_int(demo_file)
-            infos.tickrate = int(infos.ticks / infos.time)
-            if(IsGoodIPPORTFormat(infos.host_name)):
-                infos.demo_type = 0     # RIE   TODO : Add localhost:PORT check.
-            else:
-                infos.demo_type = 1     # TV
+    if read_str(demo_file, 8) == 'HL2DEMO':
+        infos = DemoInfo()
+        infos.dem_prot = read_int(demo_file)
+        infos.net_prot = read_int(demo_file)
+        infos.host_name = read_str(demo_file)
+        infos.client_name = read_str(demo_file)
+        infos.map_name = read_str(demo_file)
+        infos.gamedir = read_str(demo_file)
+        infos.time = read_float(demo_file)
+        infos.ticks = read_int(demo_file)
+        infos.frames = read_int(demo_file)
+        infos.tickrate = int(infos.ticks / infos.time)
+        if(IsGoodIPPORTFormat(infos.host_name)):
+            infos.demo_type = 0     # RIE   TODO : Add localhost:PORT check.
         else:
-            print("Bad file format.")
-    finally:
-        if close_demo_file:
-            demo_file.close()
+            infos.demo_type = 1     # TV
+    else:
+        print("Bad file format.")
     return infos
 
-class DemoFile():
-    def __init__(self, demo_file):
-        '''Doesn't do anything right now'''
-        self.demo_file = demo_file
+def read_cmd_header(demo_file):
+    '''reads a cmd, tick, and player_slot'''
+    cmd = read_byte(demo_file)
 
-    def read_cmd_header(self):
-        '''reads a cmd, tick, and player_slot'''
-        cmd = read_byte(demo_file)
+    if cmd <= 0:
+        raise EOFError('Missing end tag in demo file')
 
-        if cmd <= 0:
-            raise EOFError('Missing end tag in demo file')
+    tick = read_int(demo_file)
 
-        tick = read_int(demo_file)
+    player_slot = read_byte(demo_file)
 
-        player_slot = read_byte(demo_file)
+    return cmd, tick, player_slot
 
-        return cmd, tick, player_slot
 
-    def read_raw_data(self, length):
-        size = read_int(demo_file)
+def read_raw_data(demo_file, length):
+    size = read_int(demo_file)
 
-        buff = demo_file.read(size)
+    buff = demo_file.read(size)
 
-        return buff, size
+    return buff, size
 
 class bitbuf():
     '''parses or something'''
@@ -134,15 +121,19 @@ class bitbuf():
 
     def get_num_byte_left(self):
         '''bytes left to be read'''
+        pass
+
+def parse_data_table(data):
+    '''reads and parses a data table'''
 
 
-def dump(DemoFile):
+def dump(demo_file):
     '''gets the information from the demo'''
     match_started = False
     demo_finished = False
 
     while not demo_finished:
-        cmd, tick, player_slot = DemoFile.read_cmd_header()
+        cmd, tick, player_slot = read_cmd_header(demo_file)
 
         current_tick = tick
 
@@ -154,18 +145,18 @@ def dump(DemoFile):
             demo_finished = True
         elif tick == 4:
             '''console command, nothing seems to be saved'''
-            buff, size = DemoFile.read_raw_data(0)
+            buff, size = read_raw_data(demo_file, 0)
         elif tick == 6:
             '''datatables, bitbuf library not finished'''
-            data = []*DEMO_BUFFER_SIZE
-            buf = bitbuf(data)
-            DemoFile.read_raw_data(buf.get_num_bytes_left)
+            data, size = read_raw_data(demo_file, DEMO_BUFFER_SIZE)
+            #parse_data_table
 
 
 def main():
     pathtofile = input('path to demo>')
     print('parsing {}'.format(pathtofile))
-    demo_info = get_demo_info(pathtofile=pathtofile)
+    demo_file = open(pathtofile, 'rb')
+    demo_info = get_demo_info(demo_file)
     print('Demo protocol version: {}'.format(demo_info.dem_prot))
     print('Network protocol version: {}'.format(demo_info.net_prot))
     print('HOSTNAME in case of TV, and IP:PORT or localhost:PORT in case of RIE (Record In eyes): {}'.format(demo_info.host_name))
