@@ -147,12 +147,7 @@ def read_from_buffer(data_bytes):
 def parse_data_table(data_table_bytes):
     '''reads and parses a data table'''
     data_type = read_varint32(data_table_bytes) # intentionally ignored
-    data_read = read_from_buffer(data_table_bytes)
-    
-
-
-
-    
+    data_read = read_from_buffer(data_table_bytes)  #this could fail silently
 
 
 def dump(demo_file):
