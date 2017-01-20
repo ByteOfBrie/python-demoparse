@@ -6,7 +6,7 @@ DEMO_BUFFER_SIZE = 2 * 1024 * 1024
 
 class DemoInfo():
     def __init__(self):
-        self.dem_prot = None        # demo protocol version 
+        self.dem_prot = None        # demo protocol version
         self.net_prot = None        # network protocol versio
         self.host_name = None       # HOSTNAME in case of TV, and IP:PORT or localhost:PORT in case of record in eyes
         self.client_name = None     # client name or TV name
@@ -31,7 +31,7 @@ def read_float(demo_file, n=4):
 def read_byte(demo_file):
     '''read unsigned char from the file'''
     return struct.unback('=B', demo_file.read(1))[0]
- 
+
 def IsGoodIPPORTFormat(ip_str):
     '''check for valid ip adress, does not need to be perfect'''
     ip_str = ip_str.replace('localhost', '127.0.0.1')
@@ -40,11 +40,11 @@ def IsGoodIPPORTFormat(ip_str):
         return True
     except socket.error:
         return False
- 
+
 def get_demo_info(pathtofile = None, demo_file = None):
-    '''reads the header of a demo_file, openening if necessary''' 
+    '''reads the header of a demo_file, openening if necessary'''
     infos = None
-    
+
     if read_str(demo_file, 8) == 'HL2DEMO':
         infos = DemoInfo()
         infos.dem_prot = read_int(demo_file)
@@ -64,6 +64,24 @@ def get_demo_info(pathtofile = None, demo_file = None):
     else:
         print("Bad file format.")
     return infos
+
+def read_varint32(bytes_in):
+    '''takes a bytes that conatains a varint32 and returns it as a normal int'''
+    val = 0
+    shift = 0
+
+    while True:
+        byte = bytes_in.read(1)
+        if byte == b'':
+            raise EOFError()
+
+        val |= (byte[0] &  0x7f) << shift
+        shift += 7
+
+        if not (byte[0] & 0x80):
+            break
+
+    return val
 
 def read_cmd_header(demo_file):
     '''reads a cmd, tick, and player_slot'''
@@ -91,10 +109,10 @@ class bitbuf():
     '''parses or something'''
     def __init__(self, data, buffer_size=DEMO_BUFFER_SIZE):
         self.mask_table = [0, ( 1 << 1 ) - 1, ( 1 << 2 ) - 1, ( 1 << 3 ) - 1,
-                          ( 1 << 4 ) - 1, ( 1 << 5 ) - 1, ( 1 << 6 ) - 1, 
-                          ( 1 << 7 ) - 1, ( 1 << 8 ) - 1, ( 1 << 9 ) - 1, 
+                          ( 1 << 4 ) - 1, ( 1 << 5 ) - 1, ( 1 << 6 ) - 1,
+                          ( 1 << 7 ) - 1, ( 1 << 8 ) - 1, ( 1 << 9 ) - 1,
                           ( 1 << 10 ) - 1, ( 1 << 11 ) - 1, ( 1 << 12 ) - 1,
-                          ( 1 << 13 ) - 1, ( 1 << 14 ) - 1, ( 1 << 15 ) - 1, 
+                          ( 1 << 13 ) - 1, ( 1 << 14 ) - 1, ( 1 << 15 ) - 1,
                           ( 1 << 16 ) - 1, ( 1 << 17 ) - 1, ( 1 << 18 ) - 1,
                           ( 1 << 19 ) - 1, ( 1 << 20 ) - 1, ( 1 << 21 ) - 1,
                           ( 1 << 22 ) - 1, ( 1 << 23 ) - 1, ( 1 << 24 ) - 1,
@@ -120,9 +138,21 @@ class bitbuf():
         '''get_num_bits_read, but returns bytes'''
         return (self.get_num_bytes_read() + 7) >> 3
 
+def read_from_buffer(data_bytes):
+    '''takes a bytesio file and reads a different something'''
+    table_size = read_varint32(data_bytes)
+    data_read = read_raw_data(data_bytes, table_size)
+    return data_read
 
 def parse_data_table(data_table_bytes):
     '''reads and parses a data table'''
+    data_type = read_varint32(data_table_bytes) # intentionally ignored
+    data_read = read_from_buffer(data_table_bytes)
+    
+
+
+
+    
 
 
 def dump(demo_file):
