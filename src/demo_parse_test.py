@@ -2,6 +2,9 @@ import struct
 import socket
 import io
 
+import cstrike15_gcmessages_pb2
+import netmessages_public_pb2
+
 DEMO_BUFFER_SIZE = 2 * 1024 * 1024
 
 class DemoInfo():
