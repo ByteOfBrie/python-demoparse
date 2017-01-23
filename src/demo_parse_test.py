@@ -147,10 +147,26 @@ def read_from_buffer(data_bytes):
     data_read = read_raw_data(data_bytes, table_size)
     return data_read
 
+def recv_table_read_infos(msg):
+    '''extracts data from the msg object, which is a CSVCMsg_SendTable()'''
+
+
+
 def parse_data_table(data_table_bytes):
     '''reads and parses a data table'''
-    data_type = read_varint32(data_table_bytes) # intentionally ignored
-    data_read = read_from_buffer(data_table_bytes)  #this could fail silently
+    msg = netmessages_public_pb2.CSVCMsg_SendTable()
+    while True:
+        data_type = read_varint32(data_table_bytes) # intentionally ignored
+        data_read = read_from_buffer(data_table_bytes)  #this may silently fail
+        
+        msg.ParseFromString(data_read)  # probably wrong, but is my best guess
+        # this is ParseFromArray in demofiledump.cpp but that doesn't seem to
+        # exist.
+
+        if msg.is_end():
+            # not really sure how this is defined or how it works
+            break
+
 
 
 def dump(demo_file):
