@@ -1,11 +1,40 @@
 import struct
 import socket
 import io
+import enum
 
 import cstrike15_gcmessages_pb2
 import netmessages_public_pb2
 
 DEMO_BUFFER_SIZE = 2 * 1024 * 1024
+
+# default settings, no output
+# TODO: make naming consistent and make all false by default
+DUMP_GAME_EVENTS = False
+SUPRESS_FOOTSTEP_EVENTS = True
+SHOW_EXTRA_PLAYER_INFO_IN_GAME_EVENTS = False
+DUMP_DEATHS = False
+SUPRESS_WARMUP_DEATHS = True
+DUMP_STRING_TABLES = False
+DUMP_DATA_TABLES = False
+DUMP_PACKET_ENTITIES = False
+DUMP_NET_MESSAGES = False
+
+# this should possibly be in a different file
+# not sure about how the Int and Int64 differences translate from c++
+SEND_PROP_TYPE = enum('DPT_Int', 
+                      'DPT_Float',
+                      'DPT_Vector',
+                      'DPT_VectorXY',   # vector that ignores the z coordinate
+                      'DPT_String',
+                      'DPT_Array',
+                      'DPT_DataTable',
+                      'DPT_Int64',
+                      'DPT_NUMSendPropTypes')
+
+# constants defined in demofilepropdecode.h, only taking what is needed
+SPROP_EXCLUDE     = 1 << 6  # ?? points at another prop to be excluded
+SPROP_INSIDEARRAY = 1 << 8  # property is inside array, shouldn't be flattened
 
 class DemoInfo():
     def __init__(self):
@@ -149,8 +178,36 @@ def read_from_buffer(data_bytes):
 
 def recv_table_read_infos(msg):
     '''extracts data from the msg object, which is a CSVCMsg_SendTable()'''
+    if DUMP_DATA_TABLES:
+        print('{}:{}'.format(msg.net_table_name(), msg.props_size()))
+        for iProp in range(msg.props_size()):
+            send_prop = msg.props(iProp)
+            
+            exclude = send_prop.flags() & SPROP_EXCLUDE
+            flags_in_array = send_prop.flags() & SPROP_INSIDEARRAY
+            in_array_str = ' inside array' if flags_in_array else ''
 
-
+            # this uses send_prop.type() in c++
+            if send_prop.type() == SEND_PROP_TYPE.DPT_DataTable or
+               exclude:
+                print('{}:{:6}:{}:{}{}'.format(send_prop.type(), 
+                                               send_prop.flags(),
+                                               send_prop.var_name(),
+                                               send_prop.dt_name(),
+                                               ' exclude' if exclude else ''))
+            elif send_prop.type() == SEND_PROP_TYPE.DPT_Array:
+                print('{}:{:6}:{}[{}]'.format(send_prop.type(),
+                                              send_prop.flags(),
+                                              send_prop.var_name(),
+                                              send_prop.num_elements()))
+            else:
+                print('{}:{:6}:{}:{},{},{:8},{}'.format(send_prop.type(),
+                                                        send_prop.flags(),
+                                                        send_prop.var_name(),
+                                                        send_prop.low_value(),
+                                                        send_prop.high_value(),
+                                                        send_prop.num_bits(),
+                                                        in_array_str))
 
 def parse_data_table(data_table_bytes):
     '''reads and parses a data table'''
