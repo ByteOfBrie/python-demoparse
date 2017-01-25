@@ -6,7 +6,17 @@ import enum
 import cstrike15_gcmessages_pb2
 import netmessages_public_pb2
 
+from demo_parse_test import *
+
 DEMO_BUFFER_SIZE = 2 * 1024 * 1024
+
+SERVER_CLASS_BITS = 0
+
+SERVER_CLASSES = []     # list of ServerClass
+DATA_TABLES = []        # list of CSVCMsg_SendTable
+CURRENT_EXCLUDES = []   # list of ExcludeEntry
+ENTITIES = []           # list of EntityEntry
+PLAYER_INFOS = []       # list of player_info
 
 # default settings, no output
 # TODO: make naming consistent and make all false by default
@@ -32,12 +42,48 @@ SEND_PROP_TYPE = enum('DPT_Int',
                       'DPT_Int64',
                       'DPT_NUMSendPropTypes')
 
-# constants defined in demofilepropdecode.h, only taking what is needed
-SPROP_EXCLUDE     = 1 << 6  # ?? points at another prop to be excluded
-SPROP_INSIDEARRAY = 1 << 8  # property is inside array, shouldn't be flattened
+# constants defined in demofilepropdecode.h
+SPROP_UNISGNED      = 1 << 0    # ?? unsigned integer data
+SPROP_COORD         = 1 << 1    # ?? float/vector is treated like a world coord
+SPROP_NOSCALE       = 1 << 2    # floating point doesn't scale, just takes value
+SPROP_EXCLUDE       = 1 << 6    # ?? points at another prop to be excluded
+SPROP_INSIDEARRAY   = 1 << 8    # property is inside array, shouldn't flatten
+SPROP_COLLAPSIBLE   = 1 << 11   # in C++ is set if it's a database with an
+                                # offset of 0 that doesn't change the pointer
+                                # not sure what this does in python
+
+# TODO: rename class and methods to be more pythonic
+# TODO: evaluate moving to another file
+class ServerClass():
+    '''data storage of something'''
+    def __init__(self):
+        '''set the default values, allocate space for array'''
+        nClassID = None
+        strName = [None]*256
+        strDTName = [None]*256
+        nDataTable = None
+
+        flattened_props = [] # list of FlattenedPropEntry
+
+class ExcludeEntry():
+    '''data storage for exclude entry'''
+    def __init__(self, var_name, DTName, DTExcluding):
+        '''sets initial values'''
+        self.var_name = var_name
+        self.DTName = DTName
+        self.DTExcluding = DTExcluding
+
+class FlattenedPropEntry():
+    '''data storage for flattened properties'''
+    def __init__(self, prop, array_element_prop):
+        '''sets initial values'''
+        self.prop = prop
+        self.array_element_prop = array_element_prop
 
 class DemoInfo():
+    '''data storage for basic info about the demo contained in the header'''
     def __init__(self):
+        '''create default values and what they mean'''
         self.dem_prot = None        # demo protocol version
         self.net_prot = None        # network protocol versio
         self.host_name = None       # HOSTNAME in case of TV, and IP:PORT or localhost:PORT in case of record in eyes
@@ -62,7 +108,11 @@ def read_float(demo_file, n=4):
 
 def read_byte(demo_file):
     '''read unsigned char from the file'''
-    return struct.unback('=B', demo_file.read(1))[0]
+    return struct.unpack('=B', demo_file.read(1))[0]
+
+def read_short(demo_file):
+    '''read signed short from the file'''
+    return struct.unpack('=h', demo_file.read(2))[0]
 
 def IsGoodIPPORTFormat(ip_str):
     '''check for valid ip adress, does not need to be perfect'''
@@ -209,6 +259,111 @@ def recv_table_read_infos(msg):
                                                         send_prop.num_bits(),
                                                         in_array_str))
 
+def get_table_by_name(name):
+    '''finds a table given a string name'''
+    for i in range(len(DATA_TABLES)):
+        if DATA_TABLES[i].net_table_name() == name:
+            return DATA_TABLES[i]
+    return None
+
+def is_prop_included(pTable, send_prop):
+    '''determines if prop is included??'''
+    for i in range(len(CURRENT_EXCLUDES)):
+        if (pTable.net_table_name() == CURRENT_EXCLUDES[i].DTName and
+                send_prop.var_name() == CURRENT_EXCLUDES[i].var_name):
+            return True
+    return False
+
+# TODO: more pythonic naming
+def gather_excludes(pTable):
+    '''
+    finds excludes for the particular data table
+    not sure why this needs to be called seperately for each table
+    '''
+    for i in range(pTable.props_size()):
+        send_prop = pTable[i]   # may not work
+        
+        if send_prop.flags() & SPROP_EXCLUDE:
+            CURRENT_EXCLUDES.add(ExcludeEntry(send_prop.var_name(),
+                                              send_prop.dt_name(),
+                                              pTable.net_table_name()))
+        
+        if send_prop.type() == SEND_PROP_TYPE.DPT_DataTable:
+            sub_table = get_table_by_name(send_prop.dt_name())
+            if sub_table is not None:
+                gather_excludes(sub_table)
+
+def gather_props_iterate_props(pTable, server_class, flattened_props):
+    '''iterates over something, part of gather_props'''
+    for i in range(pTable.props_size()):
+        send_prop = pTable[i]   # C++: pTable->props( iProp )
+        if (send_prop.flags() & SPROP_INSIDEARRAY or
+                send_prop.flags() & SPROP_EXCLUDE or
+                is_prop_excluded(pTable, send_prop)):
+            continue
+        if send_prop.type() == SEND_PROP_TYPE.DPT_DataTable:
+            sub_table = get_table_by_name(send_prop.dt_name())
+
+            if sub_table is not None:
+                if send_prop.flags() & SPROP_COLLAPSIBLE:
+                    gather_props_iterate_props(sub_table, server_class, 
+                                               flattened_props)
+                else:
+                    gather_props(sub_table, server_class)
+        else:
+            if send_prop.type() == SEND_PROP_TYPE.DPT_Array:
+                flattened_props.add(FlattenedPropEntry(send_prop, pTable[i-1]))
+            else:
+                flattened_props.add(FlattenedPropEntry(send_prop, None))
+
+def gather_props(pTable, server_class):
+    '''gathers properties?'''
+    temp_flattened_props = []   # list of FlattenedPropEntry
+    gather_props_iterate_props(pTable, server_class, temp_flattened_props)
+
+    flattened_props = SERVER_CLASSES[server_class].flattened_props
+
+    for flattened_prop in temp_flattened_props:
+        flattened_props.add(flattened_prop)
+
+    #not sure what happens to flattened_props here
+
+def flatten_data_table(server_class):
+    '''flattens a data table?'''
+    pTable = DATA_TABLES[SERVER_CLASSES[server_class].nDataTable]
+    pTable.clear()      # TODO: make more pythonic
+    gather_excludes(pTable)
+
+    gather_props(pTable, server_class)
+
+    priorities.add(64)
+    
+
+    for flattened_prop in flattened_props:
+        priority = flattened_prop.priority()
+
+        if priority not in priorities:
+            priorities.add(priority)
+
+    priorities.sort()
+
+    # sort flattened_props by property
+    start = 0
+    for priority in priorities:
+        while True:
+            current_prop = start
+            while current_prop < len(flattened_props):
+                prop = flattened_props[current_prop].prop   # maybe not .prop?
+                if (prop.priority() == priority or (priority == 64 and
+                    (SPROP_CHANGES_OFTEN & prop.flags()))):
+                    if start != current_prop:
+                        flattened_props[start], flattened_props[current_prop] = flattened_props[current_prop], flattened_props[start]
+                    start += 1
+                    break
+                current_prop += 1
+            if current_prop = len(flattened_props):
+                break
+
 def parse_data_table(data_table_bytes):
     '''reads and parses a data table'''
     msg = netmessages_public_pb2.CSVCMsg_SendTable()
@@ -224,7 +379,55 @@ def parse_data_table(data_table_bytes):
             # not really sure how this is defined or how it works
             break
 
+        recv_table_read_infos(msg)
 
+        DATA_TABLES.add(msg)
+
+    nServerClasses = read_short(demo_file)  # TODO: make name pythonic
+
+    # c++ contains assert here
+
+    for i in range(nServerClasses):
+        entry = ServerClass()
+        entry.nClassID = read_short(demo_file)
+
+        if (entry.nClassID >= nServerClasses):
+            raise IndexError('invalid class index {}'.format(entry.nClassID))
+        read_str(entry.strName, len(entry.strName))
+        read_str(entry.strDTName, len(entry.strDTName))
+
+        # ?? find the data table by name
+        entry.nDataTable = -1
+        for j in range(len(DATA_TABLES)):
+            if entry.strDTName == DATA_TABLES[j].net_table_name():
+                entry.nDataTable = j
+                break
+
+        if DUMP_DATA_TABLES:
+            print('class:{}:{}:{}({})'.format(entry.nClassID,
+                                              entry.strName,
+                                              entry.strDTName,
+                                              entry.nDataTable))
+    if DUMP_DATA_TABLES:
+        print('Flattening data tables...')
+
+    for i in range(nServerClasses):
+        flatten_data_table(i)
+
+    if DUMP_DATA_TABLES:    # not sure what the point of this is
+        print('Done')
+
+    temp = nServerClasses
+    SERVER_CLASS_BITS = 0
+    temp >>= 1
+    while temp:
+        temp >>= 1
+        SERVER_CLASS_BITS += 1
+    SERVER_CLASS_BITS += 1
+
+    # return probably not needed, but might be used by some function somewhere
+    # TODO: check what calls parse_data_table and delete return
+    return True
 
 def dump(demo_file):
     '''gets the information from the demo'''
