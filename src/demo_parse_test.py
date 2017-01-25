@@ -114,6 +114,10 @@ def read_short(demo_file):
     '''read signed short from the file'''
     return struct.unpack('=h', demo_file.read(2))[0]
 
+def read_word(demo_file):
+    '''read an unsigned short from the file'''
+    return struct.unpack('=H', demo_file.read(2))[0]
+
 def IsGoodIPPORTFormat(ip_str):
     '''check for valid ip adress, does not need to be perfect'''
     ip_str = ip_str.replace('localhost', '127.0.0.1')
@@ -144,7 +148,7 @@ def get_demo_info(pathtofile = None, demo_file = None):
         else:
             infos.demo_type = 1     # TV
     else:
-        print("Bad file format.")
+        print('Bad file format.')
     return infos
 
 def read_varint32(bytes_in):
@@ -425,9 +429,37 @@ def parse_data_table(data_table_bytes):
         SERVER_CLASS_BITS += 1
     SERVER_CLASS_BITS += 1
 
-    # return probably not needed, but might be used by some function somewhere
-    # TODO: check what calls parse_data_table and delete return
-    return True
+def dump_string_table(data_table_bytes, is_user_info):
+    '''parses an individual string table'''
+    numstrings = read_word(data_table_bytes)
+
+    if DUMP_STRING_TABLES:
+        print(numstrings)
+
+    if is_user_info:
+        if DUMP_STRING_TABLES:
+            print('Clearing player info array.')
+        PLAYER_INFOS.clear()
+
+    for i in range(numstrings):
+        stringname = read_str(data_table_bytes, n=4096)
+        assert(len(stringname) < 100)       # probably shouldn't be here
+        
+
+def dump_string_tables(data_table_bytes):
+    '''seperates out string tables and then passes them to dump_string_table'''
+    num_tables = read_byte(data_table_bytes)
+
+    for i in range(num_tables):
+        tablename = read_str(data_table_bytes, n=256)
+
+        if DUMP_STRING_TABLES:
+            print('ReadStringTable:{}'.format(tablename))
+
+        # might be issues coming from tablename being padded with null bytes
+        is_user_info = tablename == 'userinfo'
+
+        dump_string_table(data_table_bytes, is_user_info)
 
 def dump(demo_file):
     '''gets the information from the demo'''
@@ -452,6 +484,9 @@ def dump(demo_file):
             '''datatables, somewhat confusing'''
             data_table_bytes = io.BytesIO(read_raw_data(demo_file, DEMO_BUFFER_SIZE))
             parse_data_table(data_table_bytes)
+        elif tick == 9:
+            data_table_bytes = io.BytesIO(read_raw_data(demo_file, DEMO_BUFFER_SIZE))
+            dump_string_table(data_table_bytes)
 
 
 def main():
