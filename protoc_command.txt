@@ -1,0 +1,1 @@
+protoc --proto_path=src --python_out=src src\cstrike15_usermessages_public.proto src\netmessages_public.proto
