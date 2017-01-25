@@ -3,10 +3,10 @@ import socket
 import io
 import enum
 
-import cstrike15_gcmessages_pb2
+import cstrike15_usermessages_public_pb2
 import netmessages_public_pb2
 
-from demo_parse_test import *
+from bitstring import ConstBitStream
 
 DEMO_BUFFER_SIZE = 2 * 1024 * 1024
 
@@ -32,15 +32,16 @@ DUMP_NET_MESSAGES = False
 
 # this should possibly be in a different file
 # not sure about how the Int and Int64 differences translate from c++
-SEND_PROP_TYPE = enum('DPT_Int', 
-                      'DPT_Float',
-                      'DPT_Vector',
-                      'DPT_VectorXY',   # vector that ignores the z coordinate
-                      'DPT_String',
-                      'DPT_Array',
-                      'DPT_DataTable',
-                      'DPT_Int64',
-                      'DPT_NUMSendPropTypes')
+class SEND_PROP_TYPE:
+    DPT_Int = 0
+    DPT_Float = 1
+    DPT_Vector = 2
+    DPT_VectorXY = 3  # vector that ignores the z coordinate
+    DPT_String = 4
+    DPT_Array = 5
+    DPT_DataTable = 6
+    DPT_Int64 = 7
+    DPT_NUMSendPropTypes = 8
 
 # constants defined in demofilepropdecode.h
 SPROP_UNISGNED      = 1 << 0    # ?? unsigned integer data
@@ -59,8 +60,8 @@ class ServerClass():
     def __init__(self):
         '''set the default values, allocate space for array'''
         nClassID = None
-        strName = [None]*256
-        strDTName = [None]*256
+        strName = None 
+        strDTName = None
         nDataTable = None
 
         flattened_props = [] # list of FlattenedPropEntry
@@ -127,9 +128,12 @@ def IsGoodIPPORTFormat(ip_str):
     except socket.error:
         return False
 
-def get_demo_info(pathtofile = None, demo_file = None):
+def get_demo_info(demo_file):
     '''reads the header of a demo_file, openening if necessary'''
     infos = None
+
+    if demo_file is None:
+        raise ValueError('demo_file is None')
 
     if read_str(demo_file, 8) == 'HL2DEMO':
         infos = DemoInfo()
@@ -210,7 +214,7 @@ class bitbuf():
 
     def get_num_bits_read(self):
         '''number of bits read by this object, needs to be pythonified'''
-        if self.data = None:
+        if self.data == None:
             return None
 
         n_cur_ofs = (self.data_in - self.data)/4 - 1
@@ -242,8 +246,7 @@ def recv_table_read_infos(msg):
             in_array_str = ' inside array' if flags_in_array else ''
 
             # this uses send_prop.type() in c++
-            if send_prop.type() == SEND_PROP_TYPE.DPT_DataTable or
-               exclude:
+            if send_prop.type() == SEND_PROP_TYPE.DPT_DataTable or exclude:
                 print('{}:{:6}:{}:{}{}'.format(send_prop.type(), 
                                                send_prop.flags(),
                                                send_prop.var_name(),
@@ -365,7 +368,7 @@ def flatten_data_table(server_class):
                     start += 1
                     break
                 current_prop += 1
-            if current_prop = len(flattened_props):
+            if current_prop == len(flattened_props):
                 break
 
 def parse_data_table(data_table_bytes):
@@ -490,9 +493,11 @@ def dump(demo_file):
 
 
 def main():
-    pathtofile = input('path to demo>')
+    # pathtofile = input('path to demo>')
+    pathtofile = 'test.dem'     # makes testing less tedious
     print('parsing {}'.format(pathtofile))
     demo_file = open(pathtofile, 'rb')
+    print(demo_file)
     demo_info = get_demo_info(demo_file)
     print('Demo protocol version: {}'.format(demo_info.dem_prot))
     print('Network protocol version: {}'.format(demo_info.net_prot))
