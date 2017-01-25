@@ -195,39 +195,6 @@ def read_raw_data(demo_file, length):
 
     return buf
 
-class bitbuf():
-    '''parses or something'''
-    def __init__(self, data, buffer_size=DEMO_BUFFER_SIZE):
-        self.mask_table = [0, ( 1 << 1 ) - 1, ( 1 << 2 ) - 1, ( 1 << 3 ) - 1,
-                          ( 1 << 4 ) - 1, ( 1 << 5 ) - 1, ( 1 << 6 ) - 1,
-                          ( 1 << 7 ) - 1, ( 1 << 8 ) - 1, ( 1 << 9 ) - 1,
-                          ( 1 << 10 ) - 1, ( 1 << 11 ) - 1, ( 1 << 12 ) - 1,
-                          ( 1 << 13 ) - 1, ( 1 << 14 ) - 1, ( 1 << 15 ) - 1,
-                          ( 1 << 16 ) - 1, ( 1 << 17 ) - 1, ( 1 << 18 ) - 1,
-                          ( 1 << 19 ) - 1, ( 1 << 20 ) - 1, ( 1 << 21 ) - 1,
-                          ( 1 << 22 ) - 1, ( 1 << 23 ) - 1, ( 1 << 24 ) - 1,
-                          ( 1 << 25 ) - 1, ( 1 << 26 ) - 1, ( 1 << 27 ) - 1,
-                          ( 1 << 28 ) - 1, ( 1 << 29 ) - 1, ( 1 << 30 ) - 1,
-                          0x7fffffff, 0xffffffff]
-        self.data = data
-        self.buffer_size = buffer_size  # maybe not needed
-
-    def get_num_bits_read(self):
-        '''number of bits read by this object, needs to be pythonified'''
-        if self.data == None:
-            return None
-
-        n_cur_ofs = (self.data_in - self.data)/4 - 1
-
-        n_cur_ofs *= 32
-        n_cur_ofs += (32 - self.n_bits_avail)
-        n_adjust = 8 * (self.n_data_bytes & 3)
-        return min(n_cur_ofs + n_adjust, self.n_data_bytes)
-
-    def get_num_bytes_read(self):
-        '''get_num_bits_read, but returns bytes'''
-        return (self.get_num_bytes_read() + 7) >> 3
-
 def read_from_buffer(data_bytes):
     '''takes a bytesio file and reads a different something'''
     table_size = read_varint32(data_bytes)
