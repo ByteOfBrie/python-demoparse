@@ -248,19 +248,18 @@ def is_prop_included(pTable, send_prop):
             return True
     return False
 
-# TODO: more pythonic naming
-def gather_excludes(pTable):
+def gather_excludes(data_table):
     '''
     finds excludes for the particular data table
     not sure why this needs to be called seperately for each table
     '''
-    for i in range(pTable.props_size()):
-        send_prop = pTable[i]   # may not work
+    for i in range(data_table.props_size()):
+        send_prop = data_table[i]   # may not work
         
         if send_prop.flags() & SPROP_EXCLUDE:
             CURRENT_EXCLUDES.add(ExcludeEntry(send_prop.var_name(),
                                               send_prop.dt_name(),
-                                              pTable.net_table_name()))
+                                              data_table.net_table_name()))
         
         if send_prop.type() == SEND_PROP_TYPE.DPT_DataTable:
             sub_table = get_table_by_name(send_prop.dt_name())
