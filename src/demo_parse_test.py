@@ -10,6 +10,14 @@ from bitstring import ConstBitStream
 
 DEMO_BUFFER_SIZE = 2 * 1024 * 1024
 
+MAX_PLAYER_NAME_LENGTH = 128
+MAX_CUSTOM_FILES = 4
+SIGNED_GUID_LEN = 32
+
+ENTITY_SENTINEL = 9999
+
+MAX_STRING_TABLES = 64
+
 SERVER_CLASS_BITS = 0
 
 SERVER_CLASSES = []     # list of ServerClass
@@ -56,9 +64,9 @@ SPROP_COLLAPSIBLE   = 1 << 11   # in C++ is set if it's a database with an
 # TODO: rename class and methods to be more pythonic
 # TODO: evaluate moving to another file
 class ServerClass():
-    '''data storage of something'''
+    """data storage of something"""
     def __init__(self):
-        '''set the default values, allocate space for array'''
+        """set the default values, allocate space for array"""
         nClassID = None
         strName = None 
         strDTName = None
@@ -67,24 +75,24 @@ class ServerClass():
         flattened_props = [] # list of FlattenedPropEntry
 
 class ExcludeEntry():
-    '''data storage for exclude entry'''
+    """data storage for exclude entry"""
     def __init__(self, var_name, DTName, DTExcluding):
-        '''sets initial values'''
+        """sets initial values"""
         self.var_name = var_name
         self.DTName = DTName
         self.DTExcluding = DTExcluding
 
 class FlattenedPropEntry():
-    '''data storage for flattened properties'''
+    """data storage for flattened properties"""
     def __init__(self, prop, array_element_prop):
-        '''sets initial values'''
+        """sets initial values"""
         self.prop = prop
         self.array_element_prop = array_element_prop
 
 class DemoInfo():
-    '''data storage for basic info about the demo contained in the header'''
+    """data storage for basic info about the demo contained in the header"""
     def __init__(self):
-        '''create default values and what they mean'''
+        """create default values and what they mean"""
         self.dem_prot = None        # demo protocol version
         self.net_prot = None        # network protocol versio
         self.host_name = None       # HOSTNAME in case of TV, and IP:PORT or localhost:PORT in case of record in eyes
@@ -97,30 +105,137 @@ class DemoInfo():
         self.tickrate = None        # tickrate
         self.demo_type = None       # 0=record in eye, 1 = TV
 
-def read_str(demo_file, n=260):
-    return demo_file.read(n).decode('utf-8').strip('\x00')
+class PlayerInfo():
+    """storage class for data about player"""
+    def __init__(self, data=None):
+        """try to parse from raw data, probably won't work"""
+        if data is None:
+            self.version = None
+            self.xuid = None
+            self.name = None
+            self.userID = None
+            self.guid = None
+            self.friendsID = None
+            self.friendsName = None
+            self.fakeplayer = None
+            self.ishltv = None
+            self.custom_files = None
+            self. files_downloaded = None
+            self.entityID = None
+        else:
+            self.version = read_uint64(data)
+            self.xuid = read_uint64be(data)
+            self.name = read_str(data, n = MAX_PLAYER_NAME_LENGTH)
+            self.userID = read_int(data)
+            self.guid = read_str(data, n = SIGNED_GUID_LEN+1)
+            pad_stream(data, n = 24)
+            self.friendsID = read_uint32(data)
+            self.friendsName = read_str(data, MAX_PLAYER_NAME_LENGTH)
 
-def read_int(demo_file, n=4):
-    val = struct.unpack('=i', demo_file.read(n))[0]
-    return val
+            """
+            this next section might be completly wrong
+            this code should work under the terrible assumption that
+            bools are full bytes with the bit being at the end
+            ex: true=0000 0001 false=0000 0000
+            the bools could be also just a single bit each, or combined into
+            a byte between the two of them or even have the significant bits
+            in a different position
+            this assumption was made because it's difficult to test right now
+            and the code that was related to the data to be parsed seemed to
+            be working with full bytes, so it seems unlikely that there is a bit
+            offset that I missed
+            """
+            self.fakeplayer = read_bool(data)
+            self.ishltv = read_bool(data)
+            pad_stream(data, n = 16)
+            self.custom_files = read_custom_files(data)
+            self.files_downloaded = read_byte(data)
+            pad_stream(data, n = 24)
+            self.entityID = read_int(data)
 
-def read_float(demo_file, n=4):
-    return struct.unpack('=f', demo_file.read(n))[0]
+def read_str(demo_stream, n=260):
+    """reads a string of n bytes, decodes it as utf-8 and strips null bytes"""
+    return demo_stream.read('bytes:{}'.format(n)).decode('utf-8').strip('\x00')
 
-def read_byte(demo_file):
-    '''read unsigned char from the file'''
-    return struct.unpack('=B', demo_file.read(1))[0]
+def read_int(demo_stream):
+    """little endian signed int 32"""
+    return demo_stream.read('intle:32')
 
-def read_short(demo_file):
-    '''read signed short from the file'''
-    return struct.unpack('=h', demo_file.read(2))[0]
+def read_intbe(demo_stream):
+    """big endian signed int 32"""
+    return demo_stream.read('intbe:32')
 
-def read_word(demo_file):
-    '''read an unsigned short from the file'''
-    return struct.unpack('=H', demo_file.read(2))[0]
+def read_uint32(demo_stream):
+    """little endian unsigned int 32"""
+    return demo_stream.read('uintle:32')
+
+def read_uint32be(demo_stream):
+    """big endian unsigned int 32"""
+    return demo_stream.read('uintbe:32')
+
+def read_uint64(demo_stream):
+    """little endian unsigned in 64"""
+    return demo_stream.read('uintle:64')
+
+def read_uint64be(demo_stream):
+    """big endian unsigned int 64"""
+    return demo_stream.read('uintbe:64')
+
+def read_float(demo_stream):
+    """little endian 32 bit float"""
+    return demo_stream.read('floatle:32')
+
+def read_bytes(demo_stream, n):
+    """read n bytes from the stream"""
+    return demo_stream.read('bytes:{}'.format(n))
+
+def read_byte(demo_stream):
+    """read unsigned char from the file"""
+    return demo_stream.read('uintle:8')
+
+def read_short(demo_stream):
+    """read signed short from the file"""
+    return demo_stream.read('intle:16')
+
+def read_word(demo_stream):
+    """read an unsigned short from the file"""
+    return demo_stream.read('uintle:16')
+
+def read_bit(demo_stream):
+    """read a single bit and return it as a bool"""
+    return demo_stream.read('bool')
+
+def read_uchar(demo_stream):
+    """read an 1 byte unsigned char"""
+    return demo_stream.read('uintle:8')
+
+def read_bool(demo_stream):
+    """reads a entire byte and evaluates it as a bool"""
+    return bool(demo_stream.read(8))
+
+def read_ulong(demo_stream):
+    """read unsigned long 32 bits"""
+    return demo_stream.read('uintle:32')
+
+def read_custom_files(demo_stream):
+    """read 4 unsigned longs into a list"""
+    return [read_ulong(demo_stream), read_ulong(demo_stream),
+            read_ulong(demo_stream), read_ulong(demo_stream)]
+
+def pad_stream(demo_stream, n):
+    """ignore n bits. this function only exists to make bitstring easier
+    to replace with another library in the future
+    """
+    demo_stream.read('pad:{}'.format(n))
+
+def read_raw_data(demo_stream):
+    """read a something (frame?) of bytes from the file"""
+    size = read_int(demo_stream)
+
+    return demo_stream.read(size)
 
 def IsGoodIPPORTFormat(ip_str):
-    '''check for valid ip adress, does not need to be perfect'''
+    """check for valid ip adress, does not need to be perfect"""
     ip_str = ip_str.replace('localhost', '127.0.0.1')
     try:
         socket.inet_aton(ip_str)
@@ -128,27 +243,27 @@ def IsGoodIPPORTFormat(ip_str):
     except socket.error:
         return False
 
-def get_demo_info(demo_file):
-    '''reads the header of a demo_file, openening if necessary'''
+def get_demo_info(demo_stream):
+    """reads the header of a binary stream of a demo file"""
     infos = None
 
-    if demo_file is None:
+    if demo_stream is None:
         raise ValueError('demo_file is None')
 
-    if read_str(demo_file, 8) == 'HL2DEMO':
+    if read_str(demo_stream, 8) == 'HL2DEMO':
         infos = DemoInfo()
-        infos.dem_prot = read_int(demo_file)
-        infos.net_prot = read_int(demo_file)
-        infos.host_name = read_str(demo_file)
-        infos.client_name = read_str(demo_file)
-        infos.map_name = read_str(demo_file)
-        infos.gamedir = read_str(demo_file)
-        infos.time = read_float(demo_file)
-        infos.ticks = read_int(demo_file)
-        infos.frames = read_int(demo_file)
+        infos.dem_prot = read_int(demo_stream)
+        infos.net_prot = read_int(demo_stream)
+        infos.host_name = read_str(demo_stream)
+        infos.client_name = read_str(demo_stream)
+        infos.map_name = read_str(demo_stream)
+        infos.gamedir = read_str(demo_stream)
+        infos.time = read_float(demo_stream)
+        infos.ticks = read_int(demo_stream)
+        infos.frames = read_int(demo_stream)
         infos.tickrate = int(infos.ticks / infos.time)
         if(IsGoodIPPORTFormat(infos.host_name)):
-            infos.demo_type = 0     # RIE   TODO : Add localhost:PORT check.
+            infos.demo_type = 0     # RIE
         else:
             infos.demo_type = 1     # TV
     else:
@@ -156,7 +271,7 @@ def get_demo_info(demo_file):
     return infos
 
 def read_varint32(bytes_in):
-    '''takes a bytes that conatains a varint32 and returns it as a normal int'''
+    """takes a bytes that conatains a varint32 and returns it as a normal int"""
     val = 0
     shift = 0
 
@@ -174,7 +289,7 @@ def read_varint32(bytes_in):
     return val
 
 def read_cmd_header(demo_file):
-    '''reads a cmd, tick, and player_slot'''
+    """reads a cmd, tick, and player_slot"""
     cmd = read_byte(demo_file)
 
     if cmd <= 0:
@@ -187,22 +302,14 @@ def read_cmd_header(demo_file):
     return cmd, tick, player_slot
 
 
-def read_raw_data(demo_file, length):
-    '''read a something (frame?) of bytes from the file'''
-    size = read_int(demo_file)
-
-    buf = demo_file.read(size)
-
-    return buf
-
 def read_from_buffer(data_bytes):
-    '''takes a bytesio file and reads a different something'''
+    """takes a bytesio file and reads a different something"""
     table_size = read_varint32(data_bytes)
-    data_read = read_raw_data(data_bytes, table_size)
+    data_read = read_raw_data(data_stream)
     return data_read
 
 def recv_table_read_infos(msg):
-    '''extracts data from the msg object, which is a CSVCMsg_SendTable()'''
+    """extracts data from the msg object, which is a CSVCMsg_SendTable()"""
     if DUMP_DATA_TABLES:
         print('{}:{}'.format(msg.net_table_name(), msg.props_size()))
         for iProp in range(msg.props_size()):
@@ -234,14 +341,14 @@ def recv_table_read_infos(msg):
                                                         in_array_str))
 
 def get_table_by_name(name):
-    '''finds a table given a string name'''
+    """finds a table given a string name"""
     for i in range(len(DATA_TABLES)):
         if DATA_TABLES[i].net_table_name() == name:
             return DATA_TABLES[i]
     return None
 
 def is_prop_included(pTable, send_prop):
-    '''determines if prop is included??'''
+    """determines if prop is included??"""
     for i in range(len(CURRENT_EXCLUDES)):
         if (pTable.net_table_name() == CURRENT_EXCLUDES[i].DTName and
                 send_prop.var_name() == CURRENT_EXCLUDES[i].var_name):
@@ -249,10 +356,10 @@ def is_prop_included(pTable, send_prop):
     return False
 
 def gather_excludes(data_table):
-    '''
+    """
     finds excludes for the particular data table
     not sure why this needs to be called seperately for each table
-    '''
+    """
     for i in range(data_table.props_size()):
         send_prop = data_table[i]   # may not work
         
@@ -267,7 +374,7 @@ def gather_excludes(data_table):
                 gather_excludes(sub_table)
 
 def gather_props_iterate_props(pTable, server_class, flattened_props):
-    '''iterates over something, part of gather_props'''
+    """iterates over something, part of gather_props"""
     for i in range(pTable.props_size()):
         send_prop = pTable[i]   # C++: pTable->props( iProp )
         if (send_prop.flags() & SPROP_INSIDEARRAY or
@@ -290,7 +397,7 @@ def gather_props_iterate_props(pTable, server_class, flattened_props):
                 flattened_props.add(FlattenedPropEntry(send_prop, None))
 
 def gather_props(pTable, server_class):
-    '''gathers properties?'''
+    """gathers properties?"""
     temp_flattened_props = []   # list of FlattenedPropEntry
     gather_props_iterate_props(pTable, server_class, temp_flattened_props)
 
@@ -302,12 +409,12 @@ def gather_props(pTable, server_class):
     #not sure what happens to flattened_props here
 
 def flatten_data_table(server_class):
-    '''flattens a data table?'''
-    pTable = DATA_TABLES[SERVER_CLASSES[server_class].nDataTable]
-    pTable.clear()      # TODO: make more pythonic
-    gather_excludes(pTable)
+    """flattens a data table?"""
+    table = DATA_TABLES[SERVER_CLASSES[server_class].nDataTable]
+    table.clear()      # TODO: make more pythonic
+    gather_excludes(table)
 
-    gather_props(pTable, server_class)
+    gather_props(table, server_class)
 
     priorities.add(64)
     
@@ -338,7 +445,7 @@ def flatten_data_table(server_class):
                 break
 
 def parse_data_table(data_table_bytes):
-    '''reads and parses a data table'''
+    """reads and parses a data table"""
     msg = netmessages_public_pb2.CSVCMsg_SendTable()
     while True:
         data_type = read_varint32(data_table_bytes) # intentionally ignored
@@ -356,15 +463,15 @@ def parse_data_table(data_table_bytes):
 
         DATA_TABLES.add(msg)
 
-    nServerClasses = read_short(demo_file)  # TODO: make name pythonic
+    server_classes = read_short(data_table_bytes)  # TODO: make name pythonic
 
-    # c++ contains assert here
+    # c++ contains assert here, ignoring for now
 
-    for i in range(nServerClasses):
+    for i in range(server_classes):
         entry = ServerClass()
         entry.nClassID = read_short(demo_file)
 
-        if (entry.nClassID >= nServerClasses):
+        if (entry.nClassID >= server_classes):
             raise IndexError('invalid class index {}'.format(entry.nClassID))
         read_str(entry.strName, len(entry.strName))
         read_str(entry.strDTName, len(entry.strDTName))
@@ -384,13 +491,13 @@ def parse_data_table(data_table_bytes):
     if DUMP_DATA_TABLES:
         print('Flattening data tables...')
 
-    for i in range(nServerClasses):
+    for i in range(server_classes):
         flatten_data_table(i)
 
     if DUMP_DATA_TABLES:    # not sure what the point of this is
         print('Done')
 
-    temp = nServerClasses
+    temp = server_classes
     SERVER_CLASS_BITS = 0
     temp >>= 1
     while temp:
@@ -398,8 +505,15 @@ def parse_data_table(data_table_bytes):
         SERVER_CLASS_BITS += 1
     SERVER_CLASS_BITS += 1
 
+def find_player_by_entity(entityID):
+    """search through PLAYER_INFOS for an ID of entityID"""
+    for index, entity in enumerate(PLAYER_INFOS):
+        if entity.entityID == entityID:
+            return index
+    return None
+
 def dump_string_table(data_table_bytes, is_user_info):
-    '''parses an individual string table'''
+    """parses an individual string table"""
     numstrings = read_word(data_table_bytes)
 
     if DUMP_STRING_TABLES:
@@ -413,10 +527,62 @@ def dump_string_table(data_table_bytes, is_user_info):
     for i in range(numstrings):
         stringname = read_str(data_table_bytes, n=4096)
         assert(len(stringname) < 100)       # probably shouldn't be here
-        
+
+        if read_bit(data_table_bytes):
+            user_data_size = read_word(data_table_bytes)
+            assert(user_data_size > 0)
+            data = read_bytes(user_data_size)
+
+            if is_user_info and data is not None:
+                player_info = PlayerInfo(data)
+                player_info.entityID = i
+
+                existing = find_player_by_entity(i)
+                if existing is None:
+                    if DUMP_STRING_TABLES:
+                        print('adding player entity {} info:'.format(i))
+                        print('xuid:{}'.format(player_info.xuid))
+                        print('name:{}'.format(player_info.name))
+                        print('userID:{}'.format(player_info.userID))
+                        print('guid:{}'.format(player_info.guid))
+                        print('friendsID:{}'.format(player_info.friendsID))
+                        print('friendsName:{}'.format(player_info.fakeplayer))
+                        print('ishltv:{}'.format(player_info.ishltv))
+                        print('filesDownloaded:{}'.format(player_info.filesDownloaded))
+                    PLAYER_INFOS.add(player_info)
+                else:
+                    # should never happen, but just in case
+                    PLAYER_INFOS[existing] = player_info
+            else:
+                if DUMP_STRING_TABLES:
+                    print(' {}, {}, userdata[{}]'.format(i, stringname,
+                                                         user_data_size))
+        else:
+            if DUMP_STRING_TABLES:
+                print(' {}, {}'.format(i, stringname))
+
+    if read_bit(data_table_bytes):
+        numstrings = read_word(data_table_bytes)
+        for i in range(numstrings):
+            stringname = read_str(data_table_bytes, n=4096)
+            if read_bit(data_table_bytes):
+                user_data_size = read_word(data_table_bytes)
+                assert(user_data_size > 0)
+
+                data = read_bytes(data_table_bytes, n=user_data_size)
+
+                if i >= 2:
+                    if DUMP_STRING_TABLES:
+                        print(' {}, {}, userdata[{}]'.format(i, stringname,
+                                                             user_data_size))
+            else:
+                if i >= 2:
+                    if DUMP_STRING_TABLES:
+                        print(' {}, {}'.format(i, stringname))
+
 
 def dump_string_tables(data_table_bytes):
-    '''seperates out string tables and then passes them to dump_string_table'''
+    """seperates out string tables and then passes them to dump_string_table"""
     num_tables = read_byte(data_table_bytes)
 
     for i in range(num_tables):
@@ -430,41 +596,49 @@ def dump_string_tables(data_table_bytes):
 
         dump_string_table(data_table_bytes, is_user_info)
 
-def dump(demo_file):
-    '''gets the information from the demo'''
+def dump(demo_stream):
+    """gets the information from the demo"""
     match_started = False
     demo_finished = False
 
     while not demo_finished:
-        cmd, tick, player_slot = read_cmd_header(demo_file)
+        cmd, tick, player_slot = read_cmd_header(demo_stream)
 
         current_tick = tick
 
         if tick == 3:
-            '''synctick, doesn't seem to do anything'''
+            """synctick, doesn't seem to do anything"""
             pass
+
         elif tick == 7:
-            '''stop tick'''
+            """stop tick"""
             demo_finished = True
+
         elif tick == 4:
-            '''console command, nothing seems to be saved'''
-            buf = read_raw_data(demo_file, 0)
+            """console command, nothing seems to be saved in c++
+            it might be interesting to do something with this at some point
+            """
+            buf = read_raw_data(demo_stream)
+
         elif tick == 6:
-            '''datatables, somewhat confusing'''
-            data_table_bytes = io.BytesIO(read_raw_data(demo_file, DEMO_BUFFER_SIZE))
+            """datatables, somewhat confusing"""
+            data_table_bytes = read_raw_data(demo_stream)
+
             parse_data_table(data_table_bytes)
+
         elif tick == 9:
-            data_table_bytes = io.BytesIO(read_raw_data(demo_file, DEMO_BUFFER_SIZE))
-            dump_string_table(data_table_bytes)
+            """read a stringtable, somewhat confusing"""
+            data_table_bytes = read_raw_data(demo_stream)
+            
+            dump_string_tables(data_table_bytes)
 
 
 def main():
     # pathtofile = input('path to demo>')
     pathtofile = 'test.dem'     # makes testing less tedious
     print('parsing {}'.format(pathtofile))
-    demo_file = open(pathtofile, 'rb')
-    print(demo_file)
-    demo_info = get_demo_info(demo_file)
+    demo_stream = ConstBitStream(filename=pathtofile)
+    demo_info = get_demo_info(demo_stream)
     print('Demo protocol version: {}'.format(demo_info.dem_prot))
     print('Network protocol version: {}'.format(demo_info.net_prot))
     print('HOSTNAME in case of TV, and IP:PORT or localhost:PORT in case of RIE (Record In eyes): {}'.format(demo_info.host_name))
