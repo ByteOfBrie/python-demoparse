@@ -2,12 +2,14 @@ import struct
 import socket
 import io
 import enum
+from collections import namedtuple
 
 import cstrike15_usermessages_public_pb2
 import netmessages_public_pb2
 
 from bitstring import ConstBitStream
 
+NET_MAX_PAYLOAD = 262144 - 4
 DEMO_BUFFER_SIZE = 2 * 1024 * 1024
 
 MAX_PLAYER_NAME_LENGTH = 128
@@ -17,6 +19,8 @@ SIGNED_GUID_LEN = 32
 ENTITY_SENTINEL = 9999
 
 MAX_STRING_TABLES = 64
+
+MAX_SPLITSCREEN_CLIENTS = 2
 
 SERVER_CLASS_BITS = 0
 
@@ -37,6 +41,10 @@ DUMP_STRING_TABLES = False
 DUMP_DATA_TABLES = False
 DUMP_PACKET_ENTITIES = False
 DUMP_NET_MESSAGES = False
+
+# these two seem to be the same thing, but they're differentiated in C++
+Vector = namedtuple('Vector', ['x', 'y', 'z'])
+QAngle = namedtuple('QAngle', ['x', 'y', 'z'])
 
 # this should possibly be in a different file
 # not sure about how the Int and Int64 differences translate from c++
@@ -132,19 +140,6 @@ class PlayerInfo():
             self.friendsID = read_uint32(data)
             self.friendsName = read_str(data, MAX_PLAYER_NAME_LENGTH)
 
-            """
-            this next section might be completly wrong
-            this code should work under the terrible assumption that
-            bools are full bytes with the bit being at the end
-            ex: true=0000 0001 false=0000 0000
-            the bools could be also just a single bit each, or combined into
-            a byte between the two of them or even have the significant bits
-            in a different position
-            this assumption was made because it's difficult to test right now
-            and the code that was related to the data to be parsed seemed to
-            be working with full bytes, so it seems unlikely that there is a bit
-            offset that I missed
-            """
             self.fakeplayer = read_bool(data)
             self.ishltv = read_bool(data)
             pad_stream(data, n = 16)
@@ -152,6 +147,43 @@ class PlayerInfo():
             self.files_downloaded = read_byte(data)
             pad_stream(data, n = 24)
             self.entityID = read_int(data)
+
+class split_t():
+    """data storage and parsing for a view angle"""
+    def __init__(self, data_bytes):
+        """parses bytes to view angles"""
+        self.flags = read_int(data_bytes)
+
+        # original origin/view angles
+        self.viewOrigin = Vector(read_float(data_bytes),
+                                 read_float(data_bytes),
+                                 read_float(data_bytes))
+        self.viewAngles = QAngle(read_float(data_bytes),
+                                 read_float(data_bytes),
+                                 read_float(data_bytes))
+        self.localViewAngles = QAngle(read_float(data_bytes),
+                                      read_float(data_bytes),
+                                      read_float(data_bytes))
+
+        # resampled origin/view angles
+        self.viewOrigin2 = Vector(read_float(data_bytes),
+                                  read_float(data_bytes),
+                                  read_float(data_bytes))
+        self.viewAngles2 = QAngle(read_float(data_bytes),
+                                  read_float(data_bytes),
+                                  read_float(data_bytes))
+        self.localViewAngles2 = QAngle(read_float(data_bytes),
+                                       read_float(data_bytes),
+                                       read_float(data_bytes))
+
+
+class demo_cmd_info():
+    """data storage and parsing for a demo_cmd"""
+    def __init__(self, data_bytes):
+        """takes in bytes and creates the demo_cmd_info class"""
+        self.u = []
+        self.u.add(split_t(read_bytes, 76))
+        self.u.add(split_t(read_bytes, 76))
 
 def read_str(demo_stream, n=260):
     """reads a string of n bytes, decodes it as utf-8 and strips null bytes"""
@@ -234,6 +266,14 @@ def read_raw_data(demo_stream):
 
     return demo_stream.read(size)
 
+def read_user_cmd(demo_stream):
+    """I don't think this is actually used to collect data"""
+    outgoing = read_int(demo_stream)
+
+    read_raw_data(demo_stream)
+
+    return outgoing
+
 def IsGoodIPPORTFormat(ip_str):
     """check for valid ip adress, does not need to be perfect"""
     ip_str = ip_str.replace('localhost', '127.0.0.1')
@@ -270,13 +310,13 @@ def get_demo_info(demo_stream):
         print('Bad file format.')
     return infos
 
-def read_varint32(bytes_in):
+def read_varint32(data_stream):
     """takes a bytes that conatains a varint32 and returns it as a normal int"""
     val = 0
     shift = 0
 
     while True:
-        byte = bytes_in.read(1)
+        byte = read_byte(data_stream)
         if byte == b'':
             raise EOFError()
 
@@ -301,6 +341,9 @@ def read_cmd_header(demo_file):
 
     return cmd, tick, player_slot
 
+def read_cmd_info(data_stream):
+    demo_cmd_bytes = read_bytes(data_stream, 156)
+    demo_cmd_info(demo_cmd_bytes)
 
 def read_from_buffer(data_bytes):
     """takes a bytesio file and reads a different something"""
@@ -463,7 +506,7 @@ def parse_data_table(data_table_bytes):
 
         DATA_TABLES.add(msg)
 
-    server_classes = read_short(data_table_bytes)  # TODO: make name pythonic
+    server_classes = read_short(data_table_bytes)
 
     # c++ contains assert here, ignoring for now
 
@@ -596,6 +639,30 @@ def dump_string_tables(data_table_bytes):
 
         dump_string_table(data_table_bytes, is_user_info)
 
+def read_sequence_info(data_stream):
+    """takes bytes in and reads two ints"""
+    sequence_num_in = read_int(data_stream)
+    sequence_num_out = read_int(data_stream)
+    return (sequence_num_in, sequence_num_out)
+
+def dump_demo_packet(data_stream, length):
+    """deals with some parsing of a demo packet"""
+    while data_stream.bytepos < length:
+        cmd = read_varint32(data_stream)
+        size = read_varint32(data_stream)
+
+        
+
+def handle_demo_packet(data_table_bytes):
+    """parses a data packet"""
+    read_cmd_info(data_table_bytes)
+    read_sequence_info(data_table_bytes)    # result ignored
+
+    data_table = read_bytes(data_table_bytes, NET_MAX_PAYLOAD)
+
+    length = read_raw_data(data_table)
+    dump_demo_packet(data_table, length)
+
 def dump(demo_stream):
     """gets the information from the demo"""
     match_started = False
@@ -631,6 +698,10 @@ def dump(demo_stream):
             data_table_bytes = read_raw_data(demo_stream)
             
             dump_string_tables(data_table_bytes)
+        elif tick == 5:
+            read_user_cmd(data_table_bytes)
+        elif tick == 1 or tick == 2:
+            handle_demo_packet(data_table_bytes)
 
 
 def main():
