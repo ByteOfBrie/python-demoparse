@@ -50,6 +50,9 @@ DUMP_DATA_TABLES = False
 DUMP_PACKET_ENTITIES = False
 DUMP_NET_MESSAGES = False
 
+# this shouldn't be a global, but there isn't a demo object yet
+GAME_EVENT_LIST = netmessages_public_pb2.CSVCMsg_GameEventList()
+
 # these two seem to be the same thing, but they're differentiated in C++
 Vector = namedtuple('Vector', ['x', 'y', 'z'])
 QAngle = namedtuple('QAngle', ['x', 'y', 'z'])
@@ -654,6 +657,11 @@ def read_sequence_info(data_stream):
     sequence_num_out = read_int(data_stream)
     return (sequence_num_in, sequence_num_out)
 
+def demo_msg_print(msg, size):
+    """prints out some debug info, designed to be similar to the c version"""
+    print('--- {} ({} bytes) --------'.format(type(msg), size))
+    print(msg)      # should be defined but may not actually work
+
 def handle_svc_user_message(data_stream, size, cmd):
     """handles a packet of type svc_user_message"""
     dump_user_messages(data_stream, size)       #TODO: implement dump_user_messages
@@ -801,6 +809,45 @@ def handle_svc_packet_entities(data_stream, size, cmd):
                     if DUMP_PACKET_ENTITIES:
                         print('PreserveEnt: id:{}'.format(new_entity))
 
+def handle_net_default(data_stream, size, cmd):
+    """handles a non-special case, it might be slightly ugly"""
+    types = [netmessages_public_pb2.CCNETMsg_NOP,
+             netmessages_public_pb2.CNETMsg_Disconnect,
+             netmessages_public_pb2.CNETMsg_File,
+             netmessages_public_pb2.CNETMsg_Tick,
+             netmessages_public_pb2.CNETMsg_StringCmd,
+             netmessages_public_pb2.CNETMsg_SetConVar,
+             netmessages_public_pb2.CNETMsg_SignonState,
+             netmessages_public_pb2.CSVCMsg_ServerInfo,
+             netmessages_public_pb2.CSVCMsg_SendTable,
+             netmessages_public_pb2.CSVCMsg_ClassInfo,
+             netmessages_public_pb2.CSVCMsg_SetPause,
+             netmessages_public_pb2.CSVCMsg_CreateStringTable,
+             netmessages_public_pb2.CSVCMsg_UpdateStringTable,
+             netmessages_public_pb2.CSVCMsg_VoiceInit,
+             netmessages_public_pb2.CSVCMsg_VoiceData,
+             netmessages_public_pb2.CSVCMsg_Print,
+             netmessages_public_pb2.CSVCMsg_Sounds,
+             netmessages_public_pb2.CSVCMsg_SetView,
+             netmessages_public_pb2.CSVCMsg_FixAngle,
+             netmessages_public_pb2.CSVCMsg_CrosshairAngle,
+             netmessages_public_pb2.CSVCMsg_BSPDecal,
+             netmessages_public_pb2.CSVCMsg_UserMessage,
+             netmessages_public_pb2.CSVCMsg_GameEvent,
+             netmessages_public_pb2.CSVCMsg_PacketEntities,
+             netmessages_public_pb2.CSVCMsg_TempEntities,
+             netmessages_public_pb2.CSVCMsg_Prefetch,
+             netmessages_public_pb2.CSVCMsg_Menu,
+             netmessages_public_pb2.CSVCMsg_GameEventList,
+             netmessages_public_pb2.CSVCMsg_GetCvarValue]
+    msg = types[cmd]()
+    msg.ParseFromString(read_bytes(data_stream, size))
+    if cmd == 30:       # svc game event list
+        # demo.game_event_list should be set here but does not exist
+        # TODO: set demo.game_event_list
+        GAME_EVENT_LIST.MergeFrom(msg)
+    demo_msg_print(msg, size)
+
 def handle_netmsg(data_stream, size, cmd):
     """handle the top level of netmsg and svcmsg parsing"""
     if cmd == 23:   # svc user message
@@ -810,13 +857,13 @@ def handle_netmsg(data_stream, size, cmd):
     elif cmd == 12:     # svc create string table
         handle_svc_create_string_table(data_stream, size, cmd)
     elif cmd == 13:     # svc update string table
-        handle_svc_update_string_table(data_stream, size, cmd):
+        handle_svc_update_string_table(data_stream, size, cmd)
     elif cmd == 9:      # svc send table
-        handle_svc_send_table(data_stream, size, cmd):
+        handle_svc_send_table(data_stream, size, cmd)
     elif cmd == 26:     # svc packet entities
         handle_svc_packet_entities(data_stream, size, cmd)
     else:
-
+        handle_net_default(data_stream, size, cmd)
 
 def dump_demo_packet(data_stream, length):
     """deals with some parsing of a demo packet"""
