@@ -742,6 +742,22 @@ def handle_svc_user_message(data_stream, size, cmd):
     """handles a packet of type svc_user_message"""
     dump_user_messages(data_stream, size)
 
+def get_game_event_descriptor(msg):
+    """finds the descriptor in GAME_EVENT_LIST"""
+    #TODO: add demo class or object and change this function
+    found = False
+    for i in range(len(GAME_EVENT_LIST.descriptors)):
+        descriptor = GAME_EVENT_LIST.descriptors[i]
+        if descriptor.eventid == msg.eventid:
+            found = True
+            break
+
+    if not found:
+        if DUMP_GAME_EVENTS:
+            print(msg)
+        return None
+    return GAME_EVENT_LIST.descriptors[i]
+
 def handle_svc_game_event(data_stream, size, cmd):
     """handles a packet of type svc_game_event"""
     msg = netmessages_public_pb2.CSVCMsg_GameEvent()
@@ -957,8 +973,6 @@ def dump_demo_packet(data_stream, length):
         # here the C code does a buf.SeekRelative(size*8), but I'm going to make an awful
         # assumption that the reading code already aligns to that and just ignore it
 
-        
-
 def handle_demo_packet(data_table_bytes):
     """parses a data packet"""
     read_cmd_info(data_table_bytes)
@@ -1026,7 +1040,6 @@ def main():
     print('Number of ticks: {}'.format(demo_info.ticks))
     print('Number of frames: {}'.format(demo_info.frames))
     print('Tickrate: {}'.format(demo_info.tickrate))
-
 
 if __name__ == '__main__':
     main()
