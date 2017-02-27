@@ -662,9 +662,85 @@ def demo_msg_print(msg, size):
     print('--- {} ({} bytes) --------'.format(type(msg), size))
     print(msg)      # should be defined but may not actually work
 
+def print_user_message(user_msg):
+    """parses and then prints user message"""
+    cmd = user_msg.msg_type
+    size_um = len(user_msg.msg_data)
+    types = [cstrike15_usermessages_public_pb2.CCSUsrMsg_VGUIMenu,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_Geiger,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_Train,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_HudText,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_SayText,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_SayText2,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_TextMsg,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_HudMsg,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_ResetHud,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_GameTitle,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_Shake,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_Fade,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_Rumble,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_CloseCaption,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_CloseCaptionDirect,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_SendAudio,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_RawAudio,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_VoiceMask,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_RequestState,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_Damage,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_RadioText,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_HintText,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_KeyHintText,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_ProcessSpottedEntityUpdate,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_ReloadEffect,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_AdjustMoney,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_StopSpectatorMode,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_KillCam,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_DesiredTimescale,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_CurrentTimescale,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_AchievementEvent,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_MatchEndConditions,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_DisconnectToLobby,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_PlayerStatsUpdate,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_DisplayInventory,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_WarmupHasEnded,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_ClientInfo,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_XRankGet,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_XRankUpd,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_CallVoteFailed,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_VoteStart,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_VotePass,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_VoteFailed,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_VoteSetup,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_ServerRankRevealAll,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_SendLastKillerDamageToClient,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_ServerRankUpdate,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_ItemPickup,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_ShowMenu,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_BarTime,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_AmmoDenied,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_MarkAchievement,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_MatchStatsUpdate,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_ItemDrop,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_GlowPropTurnOff,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_SendPlayerItemDrops,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_RoundBackupFilenames,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_SendPlayerItemFound,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_ReportHit,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_XpUpdate,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_QuestProgress,
+             cstrike15_usermessages_public_pb2.CCSUsrMsg_ScoreLeaderboardData]
+    msg = types[cmd]()
+    msg.ParseFromString(user_msg.msg_data)
+    demo_msg_print(msg, um_size)
+
+def dump_user_message(data_stream, size):
+    """deals with the user message type of packets"""
+    user_msg = netmessages_public_pb2.CSVCMsg_UserMessage()
+    user_msg.ParseFromString(read_bytes(data_stream, size))
+    print_user_message(msg)
+
 def handle_svc_user_message(data_stream, size, cmd):
     """handles a packet of type svc_user_message"""
-    dump_user_messages(data_stream, size)       #TODO: implement dump_user_messages
+    dump_user_messages(data_stream, size)
 
 def handle_svc_game_event(data_stream, size, cmd):
     """handles a packet of type svc_game_event"""
@@ -844,7 +920,7 @@ def handle_net_default(data_stream, size, cmd):
     msg.ParseFromString(read_bytes(data_stream, size))
     if cmd == 30:       # svc game event list
         # demo.game_event_list should be set here but does not exist
-        # TODO: set demo.game_event_list
+        # TODO: get a demo object and change this to demo.game_event_list
         GAME_EVENT_LIST.MergeFrom(msg)
     demo_msg_print(msg, size)
 
