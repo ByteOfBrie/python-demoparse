@@ -759,6 +759,40 @@ def get_game_event_descriptor(msg):
         return None
     return GAME_EVENT_LIST.descriptors[i]
 
+def handle_player_death(msg, descriptor):
+    """finds info about player death event"""
+    num_keys = len(msg.keys)
+
+    userid = -1
+    attackerid = -1
+    assisterid = 0
+    weapon_name = None
+    headshot = False
+    for i in range(len(msg.keys)):
+        key = descriptor.keys[i]
+        key_value = msg.keys[i]
+
+        if key.name == 'userid':
+            userid = key_value.data
+        elif key.name == 'attacker':
+            attackerid = key_value.data
+        elif key.name == 'assister':
+            assisterid = key_value.data
+        elif key.name == 'weapon':
+            weapon_name = key_value.data
+        elif key.name == 'headshot':
+            headshot = key_value.data
+    
+    # TODO: implement show_player_info
+    show_player_info('victim', userid, True, True)
+    print(', ', end='')
+    show_player_info('attacker', attackerid, True, True)
+    print(', {}, {}'.format(weapon_name, str(headshot), end='')
+    if assisterid != 0:
+        print(', ', end='')
+        show_player_info('assister', assisterid, True, True)
+    print()
+
 def parse_game_event(msg, descriptor):
     """gets the info from the game event"""
     if descriptor is None:
@@ -770,7 +804,6 @@ def parse_game_event(msg, descriptor):
                 MATCH_START_OCCURED = True
             allow_death_report = (MATCH_START_OCCURED or DUMP_WARMUP_DEATHS) and DUMP_DEATHS
             if descriptor.name == 'player_death' and allow_death_report:
-                # TODO: implement handle_player_death
                 handle_player_death(msg, descriptor)
             if DUMP_GAME_EVENTS:
                 print('{}\n{'.format(descriptor.name))
@@ -791,7 +824,6 @@ def handle_svc_game_event(data_stream, size, cmd):
     msg = netmessages_public_pb2.CSVCMsg_GameEvent()
     msg.ParseFromString(data_stream.read('bytes:{}'.format(size)))
     descriptor = get_game_event_descriptor(data_stream, cmd)
-    #TODO: implement parse_game_event
     parse_game_event(msg, descriptor)
 
 def handle_svc_create_string_table(data_stream, size, cmd):
