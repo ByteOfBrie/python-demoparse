@@ -18,17 +18,25 @@ SIGNED_GUID_LEN = 32
 
 ENTITY_SENTINEL = 9999
 
-MAX_STRING_TABLES = 64
+MAX_STRING_TABLES = 64  # can probably be deleted at some point
 
 MAX_SPLITSCREEN_CLIENTS = 2
 
 SERVER_CLASS_BITS = 0
+NUM_NETWORKED_EHANDLE_SERIAL_BITS = 10
+
+FHDR_ZERO = 0
+FHDR_LEAVEPVS = 1
+FHDR_DELETE = 2
+FHDR_ENTERPVS = 4
 
 SERVER_CLASSES = []     # list of ServerClass
 DATA_TABLES = []        # list of CSVCMsg_SendTable
 CURRENT_EXCLUDES = []   # list of ExcludeEntry
 ENTITIES = []           # list of EntityEntry
 PLAYER_INFOS = []       # list of player_info
+
+STRING_TABLES = []      # list of StringTable
 
 # default settings, no output
 # TODO: make naming consistent and make all false by default
@@ -547,6 +555,7 @@ def parse_data_table(data_table_bytes):
         temp >>= 1
         SERVER_CLASS_BITS += 1
     SERVER_CLASS_BITS += 1
+    return msg
 
 def find_player_by_entity(entityID):
     """search through PLAYER_INFOS for an ID of entityID"""
@@ -645,11 +654,164 @@ def read_sequence_info(data_stream):
     sequence_num_out = read_int(data_stream)
     return (sequence_num_in, sequence_num_out)
 
+def handle_svc_packet_entities(data_stream, size, cmd):
+    """handles a packet of type svc_packet_entities"""
+
+def handle_netmsg(data_stream, size, cmd):
+    """handle the top level of netmsg parsing
+    needs to be split up into seperate functions"""
+    if cmd == 23:   # svc user message
+        dump_user_message(data_stream, size)    #TODO: implement
+    elif cmd == 25:     # svc game event
+        msg = netmessages_public_pb2.CSVCMsg_GameEvent()
+        msg.ParseFromString(data_stream.read('bytes:{}'.format(size)))
+        descriptor = get_game_event_descriptor(data_stream, cmd)    #TODO: implement
+        parse_game_event(msg, descriptor)       #TODO: implement
+    elif cmd == 12:     # svc create string table
+        msg = netmessages_public_pb2.CSVCMsg_CreateStringTable()
+        msg.ParseFromString(read_bytes(data_steam, size))
+        is_user_info = msg.name != "userinfo"
+        if DUMP_STRING_TABLES:
+            print('CreateStringTable:{}:{}:{}:{}:{}'.format(msg.name,
+                                                            msg.max_entries,
+                                                            msg.num_entries,
+                                                            msg.user_data_size,
+                                                            msg.user_data_size_bits)
+        # here the c code makes data which is a `CBitRead` for the entirity of
+        # string_data, this might need to be parsed by me later, but that can
+        # be figured out at some point
+        # TODO: implement
+        parse_string_table(msg.string_data, msg.num_entries, msg.max_entries,
+                           msg.user_data_size, msg.user_data_size_bit,
+                           msg.user_data_fixed_size, is_user_info)
+        new_string_table = StringTableData(szName = msg.name, max_entires = msg.max_entries)
+        STRING_TABLES.append(new_string_table)
+    elif cmd == 13:     # svc update string table
+        msg = netmessages_public_pb2.CSVCMsg_UpdateStringTable()
+        msg.ParseFromString(read_bytes(data_steam, size))
+        is_user_info = msg.name != "userinfo"
+        if DUMP_STRING_TABLES:
+            print('UpdateStringTable:{}({}):{}'.format(msg.table_id,
+                                                       STRING_TABLES[msg.table_id].szName,
+                                                       msg.num_changed_entries)
+        # here the c code makes data which is a `CBitRead` for the entirity of
+        # string_data, this might need to be parsed by me later, but that can
+        # be figured out at some point
+        # TODO: implement parse_string_table_update
+        parse_string_table_update(msg.string_data, msg.num_changed_entries,
+                                  STRING_TABLES[msg.table_id].nMaxEntries,
+                                  0, 0, 0, is_user_info)
+        # the c code prints out some stuff if it's a bad table here, but
+        # instead we will just silently fail
+    elif cmd == 9:      # svc send table
+        msg = netmessages_public_pb2.CSVCMsg_SendTable()
+        msg.ParseFromString(read_bytes(data_stream, size))
+        recv_table_read_infos(msg)
+    elif cmd == 26:     # svc packet entities
+        handle_svc_packet_entities(data_stream, size, cmd)
+        msg = netmessages_public_pb2.CSVCMsg_PacketEntities()
+        msg.ParseFromString(read_bytes(data_stream, size))
+        # here the c code makes `entityBitBuffer` which is a `CBitRead` that
+        # contains `msg.entity_data`, this might need to be parsed but I'm
+        # willing to pretend that it doesn't need to be
+        entity_bit_buffer = ConstBitStream(msg.entity_data)
+        as_delta = msg.is_delta         # why is this a variable
+        header_count = msg.updated_entries
+        baseline = msg.baseline
+        update_baseline = msg.update_baseline
+        header_base = -1
+        new_entity = -1
+        update_flags = 0
+
+        update_type = 3         # this is an enum type in c
+
+        while update_type < 4:
+            header_count -= 1
+            is_entity = header_count >= 0
+
+            if is_entity:
+                update_flags = FHDR_ZERO        # zero, not sure why it's in a constant
+
+                # TODO: implement read_ubitvar
+                new_entity = header_base + 1 + read_ubitvar(entity_bit_buffer)
+                header_base = new_entity
+
+                # leave pvs flag
+                if not read_bit(entity_bit_buffer):
+                    # enter pvs flag
+                    if read_bit(entity_bit_buffer):
+                        update_flags = update_flags | FHDR_ENTERPVS
+                else:
+                    update_flags = update_flags | FHDR_LEAVEPVS
+                    
+                    # ? force delete flag
+                    if read_bit(entity_bit_buffer):
+                        update_flags = update_flags | FHDR_DELETEPVS
+            update_type = 3
+            while update_type == 3:
+                if not is_entity or new_entity >= ENTITY_SENTINEL:
+                    update_type = 4     # finished
+                else:
+                    if update_flags & FHDR_ENTERPVS:
+                        update_type = 0     # enter pvs
+                    elif update_flags & FHDR_LEAVEPVS:
+                        update_type = 1     # leave pvs
+                    else:
+                        update_type = 2     # delta pvs
+
+                if update_type == 0:    # enter pvs
+                    u_class = read_ubitlong(entity_bit_buffer, SERVER_CLASS_BITS)
+                    u_serial_num = read_ubitlong(entity_bit_buffer, NUM_NETWORKED_EHANDLE_SERIAL_BITS)
+                    if DUMP_PACKET_ENTITIES:
+                        print('Entity enters PVS: id:{}, class:{}, serial:{}'.format(new_entity,
+                                                                                     u_class,
+                                                                                     u_serial_num))
+                    #TODO: implement AddEntity
+                    entity = AddEntity(new_entity, u_class, u_serial_num)
+                    #TODO: implement read_new_entity
+                    read_new_entity(entity_bit_buffer, entity)
+                elif update_type == 1:   # leave pvs
+                    if not as_delta:
+                        raise ValueError('leave pvs on full update')
+                    if DUMP_PACKET_ENTITIES:
+                        if update_flags & FHDR_DELETE:
+                            print('entity leaves pvs and is deleted: id:{}'.format(new_entity))
+                        else:
+                            print('entity leaves pvs: id:{}'.format(new_entity))
+                    remove_entity(new_entity)   #TODO: implement remove_entity
+                elif update_type == 2:  # delta ent
+                    entity = find_entity(new_entity)   #TODO: implement find_entity
+                    if DUMP_PACKET_ENTITIES:
+                        print('entity delta update: id:{}, class:{}, serial:{}'.format(entity.nEntity,
+                                                                                       entity.u_class,
+                                                                                       entity.u_serial_num))
+                    read_new_entity(entity_bit_buffer, entity)
+                elif update_type == 3:  # preserve ent
+                    if not as_delta:
+                        raise ValueError('PreserveEnt on full update')     # right type of exception?
+                    if new_entity >= MAX_EDICTS:
+                        raise ValueError('PreserveEnt: new_entity >= MAX_EDICTS')
+                    else:
+                        if DUMP_PACKET_ENTITIES:
+                            print('PreserveEnt: id:{}'.format(new_entity))
+    else:
+
+
 def dump_demo_packet(data_stream, length):
     """deals with some parsing of a demo packet"""
     while data_stream.bytepos < length:
         cmd = read_varint32(data_stream)
         size = read_varint32(data_stream)
+
+        assert data_stream.bytepos + size < length
+
+        # if cmd is 0-7 it is a netmsg, otherwise svcmsg
+        # these are seperate functions in the C code, but they
+        # seem to be identical-ish
+        handle_netmsg(data_stream, size, cmd)
+        
+        # here the C code does a buf.SeekRelative(size*8), but I'm going to make an awful
+        # assumption that the reading code already aligns to that and just ignore it
 
         
 
