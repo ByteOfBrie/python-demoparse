@@ -39,19 +39,20 @@ PLAYER_INFOS = []       # list of player_info
 STRING_TABLES = []      # list of StringTable
 
 # default settings, no output
-# TODO: make naming consistent and make all false by default
+# TODO: make naming consistent
 DUMP_GAME_EVENTS = False
-SUPRESS_FOOTSTEP_EVENTS = True
+DUMP_FOOTSTEP_EVENTS = False
 SHOW_EXTRA_PLAYER_INFO_IN_GAME_EVENTS = False
 DUMP_DEATHS = False
-SUPRESS_WARMUP_DEATHS = True
+DUMP_WARMUP_DEATHS = False
 DUMP_STRING_TABLES = False
 DUMP_DATA_TABLES = False
 DUMP_PACKET_ENTITIES = False
 DUMP_NET_MESSAGES = False
 
-# this shouldn't be a global, but there isn't a demo object yet
+# these shouldn't be globals, but there isn't a demo object yet
 GAME_EVENT_LIST = netmessages_public_pb2.CSVCMsg_GameEventList()
+MATCH_START_OCCURED = False
 
 # these two seem to be the same thing, but they're differentiated in C++
 Vector = namedtuple('Vector', ['x', 'y', 'z'])
@@ -758,11 +759,37 @@ def get_game_event_descriptor(msg):
         return None
     return GAME_EVENT_LIST.descriptors[i]
 
+def parse_game_event(msg, descriptor):
+    """gets the info from the game event"""
+    if descriptor is None:
+        raise ValueError('descriptor is None')
+    if descriptor.name != 'player_footstep' or DUMP_FOOTSTEP_EVENTS:
+        # TODO: implement handle_player_connect_events
+        if not handle_player_connect_events(msg, descriptor):
+            if descriptor.name == 'round_announce_match_start':
+                MATCH_START_OCCURED = True
+            allow_death_report = (MATCH_START_OCCURED or DUMP_WARMUP_DEATHS) and DUMP_DEATHS
+            if descriptor.name == 'player_death' and allow_death_report:
+                # TODO: implement handle_player_death
+                handle_player_death(msg, descriptor)
+            if DUMP_GAME_EVENTS:
+                print('{}\n{'.format(descriptor.name))
+                for i in range(len(msg.keys)):
+                    key = descriptor.keys[i]
+                    key_value = msg.keys[i]
+                    handled = False
+                    if key.name == 'userid' or key.name == 'attacker' or key.name == 'assister':
+                        # key_value.data is probably wrong, but I'm not sure what
+                        # the correct way is to get the data
+                        handled = show_player_info(key.name, key_value.data)
+                    if not handled:
+                        print(' {}:{}'.format(key.name, key))
+                print('}')
+
 def handle_svc_game_event(data_stream, size, cmd):
     """handles a packet of type svc_game_event"""
     msg = netmessages_public_pb2.CSVCMsg_GameEvent()
     msg.ParseFromString(data_stream.read('bytes:{}'.format(size)))
-    #TODO: implement get_game_event_descriptor
     descriptor = get_game_event_descriptor(data_stream, cmd)
     #TODO: implement parse_game_event
     parse_game_event(msg, descriptor)
