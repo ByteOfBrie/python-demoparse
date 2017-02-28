@@ -406,7 +406,7 @@ def is_prop_included(pTable, send_prop):
     """determines if prop is included??"""
     for i in range(len(CURRENT_EXCLUDES)):
         if (pTable.net_table_name() == CURRENT_EXCLUDES[i].DTName and
-                send_prop.var_name() == CURRENT_EXCLUDES[i].var_name):
+            send_prop.var_name() == CURRENT_EXCLUDES[i].var_name):
             return True
     return False
 
@@ -759,6 +759,52 @@ def get_game_event_descriptor(msg):
         return None
     return GAME_EVENT_LIST.descriptors[i]
 
+def show_player_info(field, index, show_details=True, bCSV=False):
+    """prints some stuff about a player"""
+    # TODO: implement find_player_info
+    player_info = find_player_info(index)
+    if player_info is None:
+        return False
+    if bCSV:
+        print('{}, {}, {}'.format(field, player_info.name, index), end='')
+    else:
+        print(' {}: {} (id:{})'.format(field, player_info, index))
+    
+    if show_details:
+        entity_index = player_info.entityID + 1
+        entity = find_entity(entity_index)
+        assert(entity is not None)
+        XYProp = entity.FindProp("m_vecOrigin")
+        ZProp = entity.FindProp("m_vecOrigin[2]")
+        if (XYProp is not None and ZProp is not None):
+            if bCSV:
+                print(', {}, {}, {}'.format(XYProp.m_pPropValue.m_value.m_vector.x,
+                                            XYProp.m_pPropValue.m_value.m_vector.y,
+                                            XYProp.m_pPropValue.m_value.m_vector.z),
+                      end='')
+            else:
+                print(' position: {}, {}, {}'.format(XYProp.m_pPropValue.m_value.m_vector.x,
+                                                     XYProp.m_pPropValue.m_value.m_vector.y,
+                                                     XYProp.m_pPropValue.m_value.m_vector.z))
+        angle0Prop = entity.FindProp('m_angEyeAngles[0]')
+        angle1Prop = entity.FindProp('m_angEyeAngles[1]')
+        if angle0Prop is not None and angle1Prop is not None:
+            if bCSV:
+                print(', {}, {}'.format(angle0Prop.m_pPropValue.m_value.m_float,
+                                        angle1Prop.m_pPropValue.m_value.m_float),
+                                        end = '')
+            else:
+                print(' facing: pitch:{}, yaw:{}'.format(angle0Prop.m_pPropValue.m_value.m_float,
+                                                         angle1Prop.m_pPropValue.m_value.m_float))
+        team_prop = entity.FindProp('m_iTeamNum')
+        if team_prop is not None:
+            if bCSV:
+                print(', {}'.format('T' if team_prop.m_pPropValue.m_value.m_int == 2 else 'CT'),
+                      end='')
+            else:
+                print(' team: {}'.format('T' if team_prop.m_pPropValue.m_value.m_int == 2 else 'CT'))
+    return True
+
 def handle_player_death(msg, descriptor):
     """finds info about player death event"""
     num_keys = len(msg.keys)
@@ -783,11 +829,10 @@ def handle_player_death(msg, descriptor):
         elif key.name == 'headshot':
             headshot = key_value.data
     
-    # TODO: implement show_player_info
     show_player_info('victim', userid, True, True)
     print(', ', end='')
     show_player_info('attacker', attackerid, True, True)
-    print(', {}, {}'.format(weapon_name, str(headshot), end='')
+    print(', {}, {}'.format(weapon_name, str(headshot), end=''))
     if assisterid != 0:
         print(', ', end='')
         show_player_info('assister', assisterid, True, True)
