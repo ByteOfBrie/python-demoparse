@@ -843,6 +843,71 @@ def handle_player_death(msg, descriptor):
         show_player_info('assister', assisterid, True, True)
     print()
 
+def handle_player_connect_events(msg, descriptor):
+    """deals with sorting out when players both connect and disconnect"""
+    player_disconnect = (descriptor.name == 'player_disconnect')
+    if not player_disconnect:
+        if descriptor.name != 'player_connect':
+            return False
+    numkeys = len(msg.keys)
+    userid = -1
+    index = -1
+    name = None
+    bot = False
+    reason = None
+    
+    for i in range(len(msg.keys)):
+        key = descriptor.keys[i]
+        key_value = msg.keys[i]
+
+        if key.name == 'userid':
+            userid = key.value
+        elif key.name == 'index':
+            index = key.value
+        elif key.name == 'name':
+            name = key.value
+        elif key.name == 'networkid':
+            print(key.value)        # this is to help with debugging
+            bot = bool(key.value == 'BOT')
+        elif key.name == 'bot':
+            bot = key.value
+        elif key.name == 'reason':
+            reason = key.value
+
+    if player_disconnect:
+        if DUMP_GAME_EVENTS:
+            print('Player {} (id:{}) has disconnected. Reason: {}'.format(name, userid, reason))
+        player_info = find_player_info(userid)
+        if player_info is not None:     # mark player spot as epmty
+            player_info.name = 'disconnected'
+            player_info.userid = -1
+            player_info.guid[0] = 0
+    else:
+        new_player = PlayerInfo()
+        new_player.userID = userid
+        new_player.name = name
+        new_player.fakeplayer = bot
+        if bot:
+            new_player.guid = 'bot'
+
+        new_player.entityID = index
+        
+        existing = find_player_by_entity(index)
+
+        if existing is None:
+            if DUMP_GAME_EVENTS:
+                print('Player {} {} (id:{}) connected.'.format(new_player.guid, name, userid))
+            PLAYER_INFOS.append(new_player)
+        else:
+            existing = new_player
+            # this doesn't actually work because it's not a pointer
+            # but I'm putting it here because I want to
+            # TODO: make a function to give the index of the existing player
+            # so that it can assign to the position in the array
+            # This could also be solved by giving a method to overwrite
+            # exiting but that seems uglier
+    return True
+
 def parse_game_event(msg, descriptor):
     """gets the info from the game event"""
     if descriptor is None:
