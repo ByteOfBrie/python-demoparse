@@ -759,9 +759,14 @@ def get_game_event_descriptor(msg):
         return None
     return GAME_EVENT_LIST.descriptors[i]
 
+def find_player_info(index):
+    """given an index goes and gets information about a player"""
+    for player in PLAYER_INFOS:
+        if player.userID == index:
+            return player
+
 def show_player_info(field, index, show_details=True, bCSV=False):
     """prints some stuff about a player"""
-    # TODO: implement find_player_info
     player_info = find_player_info(index)
     if player_info is None:
         return False
