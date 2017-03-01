@@ -263,6 +263,27 @@ def read_ulong(demo_stream):
     """read unsigned long 32 bits"""
     return demo_stream.read('uintle:32')
 
+def read_ubit_long(demo_stream, n):
+    """reads some type of number, not sure how this is supposed to work"""
+    return demo_stream.read('uintle:{}'.format(n*8))
+
+def read_ubit_var(demo_stream):
+    """reads some type of number, copied from c code"""
+    ret = read_ubit_long(demo_stream, 6)
+    if ret & (16 | 32) == 16:
+        ret = (ret & 15) | (read_ubit_long(demo_stream, 4) << 4)
+        assert(ret >= 16)
+
+    if ret & (16 | 32) == 32:
+        ret = (ret & 15) | (read_ubit_long(demo_stream, 8) << 4)
+        assert(ret >= 256)
+
+    if ret & (16 | 32) == 48:
+        ret = (ret & 15) | (read_ubit_long(demo_stream, 32-4) << 4)
+        assert(ret >= 4096)
+
+    return ret
+
 def read_custom_files(demo_stream):
     """read 4 unsigned longs into a list"""
     return [read_ulong(demo_stream), read_ulong(demo_stream),
@@ -966,7 +987,7 @@ def parse_string_table_update(data_stream, entries, max_entries,
         entry_index = last_entry + 1
         
         if not bool(read_bit(data_stream)):
-            entry_index = read_ubitlong(entry_bits)
+            entry_index = read_ubit_long(entry_bits)
 
         last_entry = entry_index
 
@@ -1086,8 +1107,7 @@ def handle_svc_packet_entities(data_stream, size, cmd):
         if is_entity:
             update_flags = FHDR_ZERO        # zero, not sure why it's in a constant
 
-            # TODO: implement read_ubitvar
-            new_entity = header_base + 1 + read_ubitvar(entity_bit_buffer)
+            new_entity = header_base + 1 + read_ubit_var(entity_bit_buffer)
             header_base = new_entity
 
             # leave pvs flag
@@ -1114,8 +1134,8 @@ def handle_svc_packet_entities(data_stream, size, cmd):
                     update_type = 2     # delta pvs
 
             if update_type == 0:    # enter pvs
-                u_class = read_ubitlong(entity_bit_buffer, SERVER_CLASS_BITS)
-                u_serial_num = read_ubitlong(entity_bit_buffer, NUM_NETWORKED_EHANDLE_SERIAL_BITS)
+                u_class = read_ubit_long(entity_bit_buffer, SERVER_CLASS_BITS)
+                u_serial_num = read_ubit_long(entity_bit_buffer, NUM_NETWORKED_EHANDLE_SERIAL_BITS)
                 if DUMP_PACKET_ENTITIES:
                     print('Entity enters PVS: id:{}, class:{}, serial:{}'.format(new_entity,
                                                                                  u_class,
