@@ -1244,38 +1244,46 @@ def dump(demo_stream):
 
         current_tick = tick
 
-        if tick == 1 or tick == 2:
+        if tick == 1:
+            #startup packet
+            #handled same as tick type 2
             handle_demo_packet(data_table_bytes)
+
+        elif tick == 2:
+            #normal network packet
+            #handled same as tick type 1
+            handle_demo_packet(data_table_bytes)
+
         elif tick == 3:
-            """synctick, doesn't seem to do anything"""
+            #synctick, doesn't seem to do anything
             pass
         
         elif tick == 4:
-            """console command, nothing seems to be saved in c++
-            it might be interesting to do something with this at some point
-            """
+            #console command, nothing seems to be saved in c++
+            #it might be interesting to do something with this at some point
             buf = read_raw_data(demo_stream)
 
-        elif tick == 7:
-            """stop tick"""
-            demo_finished = True
-
-        elif tick == 6:
-            """datatables, somewhat confusing"""
-            data_table_bytes = read_raw_data(demo_stream)
-
-            parse_data_table(data_table_bytes)
-
-        elif tick == 9:
-            """read a stringtable, somewhat confusing"""
-            data_table_bytes = read_raw_data(demo_stream)
-            
-            dump_string_tables(data_table_bytes)
         elif tick == 5:
             read_user_cmd(data_table_bytes)
 
+        elif tick == 7:
+            #stop tick
+            demo_finished = True
+            parse_data_table(data_table_bytes)
+
+        elif tick == 8:
+            #custom data, "blob of binary data
+            pass
+
+        elif tick == 9:
+            #read a stringtable, somewhat confusing
+            data_table_bytes = read_raw_data(demo_stream)
+            
+            dump_string_tables(data_table_bytes)
 
 def main():
+    """main method, currently opens test.dem, parses the header,
+    and then tries and fails to parse the main body"""
     if DEBUG:
         pathtofile = 'test.dem'     # makes testing less tedious
     else:
