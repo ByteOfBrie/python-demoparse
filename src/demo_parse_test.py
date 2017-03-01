@@ -913,7 +913,6 @@ def parse_game_event(msg, descriptor):
     if descriptor is None:
         raise ValueError('descriptor is None')
     if descriptor.name != 'player_footstep' or DUMP_FOOTSTEP_EVENTS:
-        # TODO: implement handle_player_connect_events
         if not handle_player_connect_events(msg, descriptor):
             if descriptor.name == 'round_announce_match_start':
                 MATCH_START_OCCURED = True
