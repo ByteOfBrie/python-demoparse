@@ -1,13 +1,12 @@
-import struct
 import socket
-import io
-import enum
 from collections import namedtuple
 
 import cstrike15_usermessages_public_pb2
 import netmessages_public_pb2
 
 from bitstring import ConstBitStream
+
+DEBUG = True
 
 NET_MAX_PAYLOAD = 262144 - 4
 DEMO_BUFFER_SIZE = 2 * 1024 * 1024
@@ -24,6 +23,9 @@ MAX_SPLITSCREEN_CLIENTS = 2
 
 SERVER_CLASS_BITS = 0
 NUM_NETWORKED_EHANDLE_SERIAL_BITS = 10
+
+SUBSTRING_BITS = 5
+MAX_USERDATA_BITS = 14
 
 FHDR_ZERO = 0
 FHDR_LEAVEPVS = 1
@@ -812,8 +814,6 @@ def show_player_info(field, index, show_details=True, bCSV=False):
 
 def handle_player_death(msg, descriptor):
     """finds info about player death event"""
-    num_keys = len(msg.keys)
-
     userid = -1
     attackerid = -1
     assisterid = 0
@@ -849,7 +849,6 @@ def handle_player_connect_events(msg, descriptor):
     if not player_disconnect:
         if descriptor.name != 'player_connect':
             return False
-    numkeys = len(msg.keys)
     userid = -1
     index = -1
     name = None
@@ -940,6 +939,80 @@ def handle_svc_game_event(data_stream, size, cmd):
     descriptor = get_game_event_descriptor(data_stream, cmd)
     parse_game_event(msg, descriptor)
 
+def parse_string_table_update(data_stream, entries, max_entries,
+                              user_data_size, user_data_size_bits,
+                              user_data_fixed_size, is_user_info):
+    """parses a string table"""
+    string_history_entry = None
+
+    last_entry = -1
+    last_dictionary_index = -1
+
+    temp = max_entries
+    temp >>= 1
+    entry_bits = 0
+
+    while temp:
+        temp >>= 1
+        entry_bits += 1
+
+    encode_using_dictionaries = bool(read_bit(data_stream))
+    if encode_using_dictionaries:
+        raise ValueError('Cannot parse string table update when encoded with dictionaries')
+
+    history = []
+
+    for i in range(entries):
+        entry_index = last_entry + 1
+        
+        if not bool(read_bit(data_stream)):
+            entry_index = read_ubitlong(entry_bits)
+
+        last_entry = entry_index
+
+        if entry_index < 0 or entry_index >= max_entries:
+            raise ValueError('bad string index {}'.format(entry_index))
+        
+        # this section is probably wrong and needs to be changed around
+        pEntry = None
+        entry = None
+        substr = None
+
+        if read_bit(data_stream):
+            substring_check = bool(read_bit)
+            if substring_check:
+                index = read_ubit_long(data_stream, 5)
+                bytes_to_copy = read_ubit_long(data_stream, SUBSTRING_BITS)
+                entry = history[index].string
+                substring = read_str(data_stream, 1024)
+                entry = entry + substring
+            else:
+                entry = read_str(data_stream, 1024)
+            pEntry = entry
+
+        tempbuf = None
+        user_data = None
+        num_bytes = None
+
+        if read_bit(data_stream):
+            if user_data_fixed_size:
+                # don't need to read length because it's fixed and
+                # "was networked down already" ???
+                num_bytes = user_data_size
+                assert(num_bytes > 0)
+                tempbuf = read_bits(data_stream, user_data_size_bits)
+            else:
+                num_bytes = read_ubit_long(data_stream, MAX_USERDATA_BITS)
+                tempbuf = read_bytes(data_stream, num_bytes)
+            user_data = tempbuf
+
+        if pEntry is None:
+            pEntry = ''
+
+        if is_user_info and user_data is not None:
+            unswapped_player_info = user_data   # probably need to do a conversion
+        
+
 def handle_svc_create_string_table(data_stream, size, cmd):
     """handles a packet of type svc_create_string_table"""
     msg = netmessages_public_pb2.CSVCMsg_CreateStringTable()
@@ -950,14 +1023,15 @@ def handle_svc_create_string_table(data_stream, size, cmd):
                                                         msg.max_entries,
                                                         msg.num_entries,
                                                         msg.user_data_size,
-                                                        msg.user_data_size_bits)
+                                                        msg.user_data_size_bits))
     # here the c code makes data which is a `CBitRead` for the entirity of
     # string_data, this might need to be parsed by me later, but that can
     # be figured out at some point
-    # TODO: implement parse_string_table
-    parse_string_table(msg.string_data, msg.num_entries, msg.max_entries,
-                       msg.user_data_size, msg.user_data_size_bit,
-                       msg.user_data_fixed_size, is_user_info)
+    # TODO: implement parse_string_table_update
+    parse_string_table_update(data_stream, msg.string_data,
+                              msg.num_entries, msg.max_entries,
+                              msg.user_data_size, msg.user_data_size_bit,
+                              msg.user_data_fixed_size, is_user_info)
     new_string_table = StringTableData(szName = msg.name, max_entires = msg.max_entries)
     STRING_TABLES.append(new_string_table)
     
@@ -969,12 +1043,13 @@ def handle_svc_update_string_table(data_stream, size, cmd):
     if DUMP_STRING_TABLES:
         print('UpdateStringTable:{}({}):{}'.format(msg.table_id,
                                                    STRING_TABLES[msg.table_id].szName,
-                                                   msg.num_changed_entries)
+                                                   msg.num_changed_entries))
     # here the c code makes data which is a `CBitRead` for the entirity of
     # string_data, this might need to be parsed by me later, but that can
     # be figured out at some point
     # TODO: implement parse_string_table_update
-    parse_string_table_update(msg.string_data, msg.num_changed_entries,
+    parse_string_table_update(data_stream, msg.string_data,
+                              msg.num_changed_entries,
                               STRING_TABLES[msg.table_id].nMaxEntries,
                               0, 0, 0, is_user_info)
     # the c code prints out some stuff if it's a bad table here, but
@@ -1025,7 +1100,7 @@ def handle_svc_packet_entities(data_stream, size, cmd):
                 
                 # ? force delete flag
                 if read_bit(entity_bit_buffer):
-                    update_flags = update_flags | FHDR_DELETEPVS
+                    update_flags = update_flags | FHDR_DELETE
         update_type = 3
         while update_type == 3:
             if not is_entity or new_entity >= ENTITY_SENTINEL:
@@ -1163,22 +1238,27 @@ def dump(demo_stream):
 
     while not demo_finished:
         cmd, tick, player_slot = read_cmd_header(demo_stream)
+        
+        if DEBUG:
+            print('cmd:{}, tick:{}, player_slot:{}'.format(cmd, tick, player_slot))
 
         current_tick = tick
 
-        if tick == 3:
+        if tick == 1 or tick == 2:
+            handle_demo_packet(data_table_bytes)
+        elif tick == 3:
             """synctick, doesn't seem to do anything"""
             pass
-
-        elif tick == 7:
-            """stop tick"""
-            demo_finished = True
-
+        
         elif tick == 4:
             """console command, nothing seems to be saved in c++
             it might be interesting to do something with this at some point
             """
             buf = read_raw_data(demo_stream)
+
+        elif tick == 7:
+            """stop tick"""
+            demo_finished = True
 
         elif tick == 6:
             """datatables, somewhat confusing"""
@@ -1193,13 +1273,13 @@ def dump(demo_stream):
             dump_string_tables(data_table_bytes)
         elif tick == 5:
             read_user_cmd(data_table_bytes)
-        elif tick == 1 or tick == 2:
-            handle_demo_packet(data_table_bytes)
 
 
 def main():
-    # pathtofile = input('path to demo>')
-    pathtofile = 'test.dem'     # makes testing less tedious
+    if DEBUG:
+        pathtofile = 'test.dem'     # makes testing less tedious
+    else:
+        pathtofile = input('path to demo>')
     print('parsing {}'.format(pathtofile))
     demo_stream = ConstBitStream(filename=pathtofile)
     demo_info = get_demo_info(demo_stream)
@@ -1213,6 +1293,7 @@ def main():
     print('Number of ticks: {}'.format(demo_info.ticks))
     print('Number of frames: {}'.format(demo_info.frames))
     print('Tickrate: {}'.format(demo_info.tickrate))
+    dump(demo_stream)
 
 if __name__ == '__main__':
     main()
