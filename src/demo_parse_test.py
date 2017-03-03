@@ -1330,7 +1330,6 @@ def main():
     demo_stream = ConstBitStream(filename=pathtofile)
     demo_info = get_demo_info(demo_stream)
 
-    print('len: {}'.format(demo_stream.bytepos))
     print('Demo protocol version: {}'.format(demo_info.dem_prot))
     print('Network protocol version: {}'.format(demo_info.net_prot))
     print('HOSTNAME if TV, and IP:PORT if RIE (Record In eyes): {}'.format(demo_info.host_name))
@@ -1342,8 +1341,7 @@ def main():
     print('Number of frames: {}'.format(demo_info.frames))
     print('Tickrate: {}'.format(demo_info.tickrate))
 
-    demo_stream.read('pad:{}'.format(8*4))      # pad to correct size, not sure
-                                                # where this is documented
+    demo_stream.bytepos = 1072      # skip to the end of the header, beginning of main demo
 
     dump(demo_stream)
 
