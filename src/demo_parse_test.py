@@ -1326,13 +1326,14 @@ def main():
     else:
         pathtofile = input('path to demo>')
     print('parsing {}'.format(pathtofile))
+
     demo_stream = ConstBitStream(filename=pathtofile)
     demo_info = get_demo_info(demo_stream)
-    demo_stream.read('pad:{}'.format(84*8))
+
     print('len: {}'.format(demo_stream.bytepos))
     print('Demo protocol version: {}'.format(demo_info.dem_prot))
     print('Network protocol version: {}'.format(demo_info.net_prot))
-    print('HOSTNAME in case of TV, and IP:PORT or localhost:PORT in case of RIE (Record In eyes): {}'.format(demo_info.host_name))
+    print('HOSTNAME if TV, and IP:PORT if RIE (Record In eyes): {}'.format(demo_info.host_name))
     print('Client name or TV name: {}'.format(demo_info.client_name))
     print('Map name: {}'.format(demo_info.map_name))
     print('Root game directory: {}'.format(demo_info.gamedir))
@@ -1340,6 +1341,10 @@ def main():
     print('Number of ticks: {}'.format(demo_info.ticks))
     print('Number of frames: {}'.format(demo_info.frames))
     print('Tickrate: {}'.format(demo_info.tickrate))
+
+    demo_stream.read('pad:{}'.format(8*4))      # pad to correct size, not sure
+                                                # where this is documented
+
     dump(demo_stream)
 
 if __name__ == '__main__':
