@@ -1,3 +1,13 @@
+"""
+Demo parser for CSGO demos, work in progress
+
+Brian Van Rosendale
+
+TODO: Parse correctly
+TODO: Move stuff around to make it behave like python
+TODO: Look into using `construct` module instead of bitstring
+"""
+
 import socket
 from collections import namedtuple
 
@@ -74,12 +84,12 @@ class SEND_PROP_TYPE:
     DPT_NUMSendPropTypes = 8
 
 # constants defined in demofilepropdecode.h
-SPROP_UNISGNED      = 1 << 0    # ?? unsigned integer data
-SPROP_COORD         = 1 << 1    # ?? float/vector is treated like a world coord
-SPROP_NOSCALE       = 1 << 2    # floating point doesn't scale, just takes value
-SPROP_EXCLUDE       = 1 << 6    # ?? points at another prop to be excluded
-SPROP_INSIDEARRAY   = 1 << 8    # property is inside array, shouldn't flatten
-SPROP_COLLAPSIBLE   = 1 << 11   # in C++ is set if it's a database with an
+SPROP_UNISGNED = 1 << 0         # ?? unsigned integer data
+SPROP_COORD = 1 << 1            # ?? float/vector is treated like a world coord
+SPROP_NOSCALE = 1 << 2          # floating point doesn't scale, just takes value
+SPROP_EXCLUDE = 1 << 6          # ?? points at another prop to be excluded
+SPROP_INSIDEARRAY = 1 << 8      # property is inside array, shouldn't flatten
+SPROP_COLLAPSIBLE = 1 << 11     # in C++ is set if it's a database with an
                                 # offset of 0 that doesn't change the pointer
                                 # not sure what this does in python
 
@@ -89,12 +99,12 @@ class ServerClass():
     """data storage of something"""
     def __init__(self):
         """set the default values, allocate space for array"""
-        nClassID = None
-        strName = None 
-        strDTName = None
-        nDataTable = None
+        self.nClassID = None
+        self.strName = None
+        self.strDTName = None
+        self.nDataTable = None
 
-        flattened_props = [] # list of FlattenedPropEntry
+        self.flattened_props = [] # list of FlattenedPropEntry
 
 class ExcludeEntry():
     """data storage for exclude entry"""
@@ -117,7 +127,8 @@ class DemoInfo():
         """create default values and what they mean"""
         self.dem_prot = None        # demo protocol version
         self.net_prot = None        # network protocol versio
-        self.host_name = None       # HOSTNAME in case of TV, and IP:PORT or localhost:PORT in case of record in eyes
+        self.host_name = None       # HOSTNAME in case of TV, and IP:PORT or
+                                    # localhost:PORT in case of record in eyes
         self.client_name = None     # client name or TV name
         self.map_name = None        # map name
         self.gamedir = None         # root game directory
@@ -147,19 +158,19 @@ class PlayerInfo():
         else:
             self.version = read_uint64(data)
             self.xuid = read_uint64be(data)
-            self.name = read_str(data, n = MAX_PLAYER_NAME_LENGTH)
+            self.name = read_str(data, n=MAX_PLAYER_NAME_LENGTH)
             self.userID = read_int(data)
-            self.guid = read_str(data, n = SIGNED_GUID_LEN+1)
-            pad_stream(data, n = 24)
+            self.guid = read_str(data, n=SIGNED_GUID_LEN+1)
+            pad_stream(data, n=24)
             self.friendsID = read_uint32(data)
             self.friendsName = read_str(data, MAX_PLAYER_NAME_LENGTH)
 
             self.fakeplayer = read_bool(data)
             self.ishltv = read_bool(data)
-            pad_stream(data, n = 16)
+            pad_stream(data, n=16)
             self.custom_files = read_custom_files(data)
             self.files_downloaded = read_byte(data)
-            pad_stream(data, n = 24)
+            pad_stream(data, n=24)
             self.entityID = read_int(data)
 
 class split_t():
@@ -196,8 +207,8 @@ class demo_cmd_info():
     def __init__(self, data_bytes):
         """takes in bytes and creates the demo_cmd_info class"""
         self.u = []
-        self.u.add(split_t(read_bytes, 76))
-        self.u.add(split_t(read_bytes, 76))
+        self.u.append(split_t(read_bytes, 76))
+        self.u.append(split_t(read_bytes, 76))
 
 def read_str(demo_stream, n=260):
     """reads a string of n bytes, decodes it as utf-8 and strips null bytes"""
@@ -255,6 +266,11 @@ def read_uchar(demo_stream):
     """read an 1 byte unsigned char"""
     return demo_stream.read('uintle:8')
 
+def read_ucharbe(demo_stream):
+    """read an 1 byte unsigned big-endian char"""
+    return demo_stream.read('uintbe:8')
+
+
 def read_bool(demo_stream):
     """reads a entire byte and evaluates it as a bool"""
     return bool(demo_stream.read(8))
@@ -272,15 +288,15 @@ def read_ubit_var(demo_stream):
     ret = read_ubit_long(demo_stream, 6)
     if ret & (16 | 32) == 16:
         ret = (ret & 15) | (read_ubit_long(demo_stream, 4) << 4)
-        assert(ret >= 16)
+        assert ret >= 16
 
     if ret & (16 | 32) == 32:
         ret = (ret & 15) | (read_ubit_long(demo_stream, 8) << 4)
-        assert(ret >= 256)
+        assert ret >= 256
 
     if ret & (16 | 32) == 48:
         ret = (ret & 15) | (read_ubit_long(demo_stream, 32-4) << 4)
-        assert(ret >= 4096)
+        assert ret >= 4096
 
     return ret
 
@@ -337,7 +353,7 @@ def get_demo_info(demo_stream):
         infos.ticks = read_int(demo_stream)
         infos.frames = read_int(demo_stream)
         infos.tickrate = int(infos.ticks / infos.time)
-        if(IsGoodIPPORTFormat(infos.host_name)):
+        if IsGoodIPPORTFormat(infos.host_name):
             infos.demo_type = 0     # RIE
         else:
             infos.demo_type = 1     # TV
@@ -358,21 +374,23 @@ def read_varint32(data_stream):
         val |= (byte[0] &  0x7f) << shift
         shift += 7
 
-        if not (byte[0] & 0x80):
+        if not byte[0] & 0x80:
             break
 
     return val
 
-def read_cmd_header(demo_file):
+def read_cmd_header(data_stream):
     """reads a cmd, tick, and player_slot"""
-    cmd = read_byte(demo_file)
+    #cmd = read_byte(demo_file)
+    cmd = data_stream.read('bin:8')
+    print(cmd)
 
     if cmd <= 0:
         raise EOFError('Missing end tag in demo file')
 
-    tick = read_int(demo_file)
+    tick = read_int(data_stream)
 
-    player_slot = read_byte(demo_file)
+    player_slot = read_byte(data_stream)
 
     return cmd, tick, player_slot
 
@@ -392,14 +410,14 @@ def recv_table_read_infos(msg):
         print('{}:{}'.format(msg.net_table_name(), msg.props_size()))
         for iProp in range(msg.props_size()):
             send_prop = msg.props(iProp)
-            
+
             exclude = send_prop.flags() & SPROP_EXCLUDE
             flags_in_array = send_prop.flags() & SPROP_INSIDEARRAY
             in_array_str = ' inside array' if flags_in_array else ''
 
             # this uses send_prop.type() in c++
             if send_prop.type() == SEND_PROP_TYPE.DPT_DataTable or exclude:
-                print('{}:{:6}:{}:{}{}'.format(send_prop.type(), 
+                print('{}:{:6}:{}:{}{}'.format(send_prop.type(),
                                                send_prop.flags(),
                                                send_prop.var_name(),
                                                send_prop.dt_name(),
@@ -429,7 +447,7 @@ def is_prop_included(pTable, send_prop):
     """determines if prop is included??"""
     for i in range(len(CURRENT_EXCLUDES)):
         if (pTable.net_table_name() == CURRENT_EXCLUDES[i].DTName and
-            send_prop.var_name() == CURRENT_EXCLUDES[i].var_name):
+                send_prop.var_name() == CURRENT_EXCLUDES[i].var_name):
             return True
     return False
 
@@ -440,12 +458,12 @@ def gather_excludes(data_table):
     """
     for i in range(data_table.props_size()):
         send_prop = data_table[i]   # may not work
-        
+
         if send_prop.flags() & SPROP_EXCLUDE:
-            CURRENT_EXCLUDES.add(ExcludeEntry(send_prop.var_name(),
-                                              send_prop.dt_name(),
-                                              data_table.net_table_name()))
-        
+            CURRENT_EXCLUDES.append(ExcludeEntry(send_prop.var_name(),
+                                                 send_prop.dt_name(),
+                                                 data_table.net_table_name()))
+
         if send_prop.type() == SEND_PROP_TYPE.DPT_DataTable:
             sub_table = get_table_by_name(send_prop.dt_name())
             if sub_table is not None:
@@ -464,15 +482,15 @@ def gather_props_iterate_props(pTable, server_class, flattened_props):
 
             if sub_table is not None:
                 if send_prop.flags() & SPROP_COLLAPSIBLE:
-                    gather_props_iterate_props(sub_table, server_class, 
+                    gather_props_iterate_props(sub_table, server_class,
                                                flattened_props)
                 else:
                     gather_props(sub_table, server_class)
         else:
             if send_prop.type() == SEND_PROP_TYPE.DPT_Array:
-                flattened_props.add(FlattenedPropEntry(send_prop, pTable[i-1]))
+                flattened_props.append(FlattenedPropEntry(send_prop, pTable[i-1]))
             else:
-                flattened_props.add(FlattenedPropEntry(send_prop, None))
+                flattened_props.append(FlattenedPropEntry(send_prop, None))
 
 def gather_props(pTable, server_class):
     """gathers properties?"""
@@ -482,7 +500,7 @@ def gather_props(pTable, server_class):
     flattened_props = SERVER_CLASSES[server_class].flattened_props
 
     for flattened_prop in temp_flattened_props:
-        flattened_props.add(flattened_prop)
+        flattened_props.append(flattened_prop)
 
     #not sure what happens to flattened_props here
 
@@ -494,14 +512,15 @@ def flatten_data_table(server_class):
 
     gather_props(table, server_class)
 
-    priorities.add(64)
-    
+    priorities = []
+    priorities.append(64)
+
 
     for flattened_prop in flattened_props:
         priority = flattened_prop.priority()
 
         if priority not in priorities:
-            priorities.add(priority)
+            priorities.append(priority)
 
     priorities.sort()
 
@@ -512,8 +531,8 @@ def flatten_data_table(server_class):
             current_prop = start
             while current_prop < len(flattened_props):
                 prop = flattened_props[current_prop].prop   # maybe not .prop?
-                if (prop.priority() == priority or (priority == 64 and
-                    (SPROP_CHANGES_OFTEN & prop.flags()))):
+                sprop_flags = SPROP_CHANGES_OFTEN & prop.flags()
+                if prop.priority() == priority or (priority == 64 and sprop_flags):
                     if start != current_prop:
                         flattened_props[start], flattened_props[current_prop] = flattened_props[current_prop], flattened_props[start]
                     start += 1
@@ -539,7 +558,7 @@ def parse_data_table(data_table_bytes):
 
         recv_table_read_infos(msg)
 
-        DATA_TABLES.add(msg)
+        DATA_TABLES.append(msg)
 
     server_classes = read_short(data_table_bytes)
 
@@ -628,7 +647,7 @@ def dump_string_table(data_table_bytes, is_user_info):
                         print('friendsName:{}'.format(player_info.fakeplayer))
                         print('ishltv:{}'.format(player_info.ishltv))
                         print('filesDownloaded:{}'.format(player_info.filesDownloaded))
-                    PLAYER_INFOS.add(player_info)
+                    PLAYER_INFOS.append(player_info)
                 else:
                     # should never happen, but just in case
                     PLAYER_INFOS[existing] = player_info
@@ -940,7 +959,7 @@ def parse_game_event(msg, descriptor):
             if descriptor.name == 'player_death' and allow_death_report:
                 handle_player_death(msg, descriptor)
             if DUMP_GAME_EVENTS:
-                print('{}\n{'.format(descriptor.name))
+                print('{}\n{{'.format(descriptor.name))
                 for i in range(len(msg.keys)):
                     key = descriptor.keys[i]
                     key_value = msg.keys[i]
@@ -1048,7 +1067,6 @@ def handle_svc_create_string_table(data_stream, size, cmd):
     # here the c code makes data which is a `CBitRead` for the entirity of
     # string_data, this might need to be parsed by me later, but that can
     # be figured out at some point
-    # TODO: implement parse_string_table_update
     parse_string_table_update(data_stream, msg.string_data,
                               msg.num_entries, msg.max_entries,
                               msg.user_data_size, msg.user_data_size_bit,
@@ -1068,7 +1086,6 @@ def handle_svc_update_string_table(data_stream, size, cmd):
     # here the c code makes data which is a `CBitRead` for the entirity of
     # string_data, this might need to be parsed by me later, but that can
     # be figured out at some point
-    # TODO: implement parse_string_table_update
     parse_string_table_update(data_stream, msg.string_data,
                               msg.num_changed_entries,
                               STRING_TABLES[msg.table_id].nMaxEntries,
@@ -1311,6 +1328,8 @@ def main():
     print('parsing {}'.format(pathtofile))
     demo_stream = ConstBitStream(filename=pathtofile)
     demo_info = get_demo_info(demo_stream)
+    demo_stream.read('pad:{}'.format(84*8))
+    print('len: {}'.format(demo_stream.bytepos))
     print('Demo protocol version: {}'.format(demo_info.dem_prot))
     print('Network protocol version: {}'.format(demo_info.net_prot))
     print('HOSTNAME in case of TV, and IP:PORT or localhost:PORT in case of RIE (Record In eyes): {}'.format(demo_info.host_name))
