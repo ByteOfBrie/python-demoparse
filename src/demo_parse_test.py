@@ -381,11 +381,10 @@ def read_varint32(data_stream):
 
 def read_cmd_header(data_stream):
     """reads a cmd, tick, and player_slot"""
-    #cmd = read_byte(demo_file)
-    cmd = data_stream.read('bin:8')
-    print(cmd)
+    cmd = read_byte(data_stream)
 
     if cmd <= 0:
+        print(cmd)
         raise EOFError('Missing end tag in demo file')
 
     tick = read_int(data_stream)
@@ -395,8 +394,23 @@ def read_cmd_header(data_stream):
     return cmd, tick, player_slot
 
 def read_cmd_info(data_stream):
-    demo_cmd_bytes = read_bytes(data_stream, 156)
+    demo_cmd_bytes = read_bytes(data_stream, 152)
     demo_cmd_info(demo_cmd_bytes)
+
+    # skip of sequence info
+    read_int(data_stream)
+    read_int(data_stream)
+
+    chunk = read_raw_data(data_stream)
+    while len(chunk) != 0:
+        cmd = read_varint32(data_stream)
+
+        message_buffer = read_raw_data(data_stream)
+
+        if DEBUG:
+            print('read_cmd_info: handle_netmsg: {}'.format(cmd))
+
+        handle_netmsg(message_buffer)
 
 def read_from_buffer(data_bytes):
     """takes a bytesio file and reads a different something"""
@@ -1281,38 +1295,38 @@ def dump(demo_stream):
 
         current_tick = tick
 
-        if tick == 1:
+        if cmd == 1:
             #startup packet
             #handled same as tick type 2
-            handle_demo_packet(data_table_bytes)
+            handle_demo_packet(demo_stream)
 
-        elif tick == 2:
+        elif cmd == 2:
             #normal network packet
             #handled same as tick type 1
-            handle_demo_packet(data_table_bytes)
+            handle_demo_packet(demo_stream)
 
-        elif tick == 3:
+        elif cmd == 3:
             #synctick, doesn't seem to do anything
             pass
         
-        elif tick == 4:
+        elif cmd == 4:
             #console command, nothing seems to be saved in c++
             #it might be interesting to do something with this at some point
             buf = read_raw_data(demo_stream)
 
-        elif tick == 5:
-            read_user_cmd(data_table_bytes)
+        elif cmd == 5:
+            read_user_cmd(demo_stream)
 
-        elif tick == 7:
+        elif cmd == 7:
             #stop tick
             demo_finished = True
-            parse_data_table(data_table_bytes)
+            parse_data_table(demo_stream)
 
-        elif tick == 8:
+        elif cmd == 8:
             #custom data, "blob of binary data
             pass
 
-        elif tick == 9:
+        elif cmd == 9:
             #read a stringtable, somewhat confusing
             data_table_bytes = read_raw_data(demo_stream)
             
