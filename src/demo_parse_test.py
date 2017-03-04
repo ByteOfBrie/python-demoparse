@@ -1268,7 +1268,7 @@ def handle_demo_packet(data_table_bytes):
     read_cmd_info(data_table_bytes)
     read_sequence_info(data_table_bytes)    # result ignored
 
-    dump_demo_packet(data_table)
+    dump_demo_packet(data_table_bytes)
 
 def dump(demo_stream):
     """gets the information from the demo"""
