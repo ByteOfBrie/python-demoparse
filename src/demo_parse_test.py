@@ -401,23 +401,7 @@ def read_cmd_header(data_stream):
 def read_cmd_info(data_stream):
     """gets data from from a cmd"""
     demo_cmd_bytes = ConstBitStream(read_bytes(data_stream, 152))
-    demo_cmd_info(demo_cmd_bytes)
-
-    # skip of sequence info
-    read_int(data_stream)
-    read_int(data_stream)
-
-    chunk = read_raw_data(data_stream)
-    while len(chunk) != 0:
-        cmd = read_varint32(data_stream)
-
-        size = read_int(data_stream)
-        message_buffer = data_stream.read(size)
-
-        if DEBUG:
-            print('read_cmd_info: handle_netmsg: {}'.format(cmd))
-
-        handle_netmsg(message_buffer, size, cmd)
+    return demo_cmd_info(demo_cmd_bytes)
 
 def read_from_buffer(data_bytes):
     """takes a bytesio file and reads a different something"""
@@ -1265,31 +1249,26 @@ def handle_netmsg(data_stream, size, cmd):
     else:
         handle_net_default(data_stream, size, cmd)
 
-def dump_demo_packet(data_stream, length):
+def dump_demo_packet(data_stream):
     """deals with some parsing of a demo packet"""
-    while data_stream.bytepos < length:
+    chunk = read_raw_data(data_stream)
+    while len(chunk) > data_stream.pos:
         cmd = read_varint32(data_stream)
-        size = read_varint32(data_stream)
 
-        assert data_stream.bytepos + size < length
+        size = read_int(data_stream)
+        message_buffer = data_stream.read(size)
 
-        # if cmd is 0-7 it is a netmsg, otherwise svcmsg
-        # these are seperate functions in the C code, but they
-        # seem to be identical-ish
-        handle_netmsg(data_stream, size, cmd)
-        
-        # here the C code does a buf.SeekRelative(size*8), but I'm going to make an awful
-        # assumption that the reading code already aligns to that and just ignore it
+        if DEBUG:
+            print('read_cmd_info: handle_netmsg: {}'.format(cmd))
+
+        handle_netmsg(message_buffer, size, cmd)
 
 def handle_demo_packet(data_table_bytes):
     """parses a data packet"""
     read_cmd_info(data_table_bytes)
     read_sequence_info(data_table_bytes)    # result ignored
 
-    data_table = read_bytes(data_table_bytes, NET_MAX_PAYLOAD)
-
-    length = read_raw_data(data_table)
-    dump_demo_packet(data_table, length)
+    dump_demo_packet(data_table)
 
 def dump(demo_stream):
     """gets the information from the demo"""
