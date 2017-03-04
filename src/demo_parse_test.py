@@ -205,10 +205,12 @@ class split_t():
 class demo_cmd_info():
     """data storage and parsing for a demo_cmd"""
     def __init__(self, data_bytes):
-        """takes in bytes and creates the demo_cmd_info class"""
+        """takes in ConstBitStream and creates the demo_cmd_info class"""
         self.u = []
-        self.u.append(split_t(read_bytes, 76))
-        self.u.append(split_t(read_bytes, 76))
+        split_t_data = ConstBitStream(read_bytes(data_bytes, 76))
+        self.u.append(split_t(split_t_data))
+        split_t_data = ConstBitStream(read_bytes(data_bytes, 76))
+        self.u.append(split_t(split_t_data))
 
 def read_str(demo_stream, n=260):
     """reads a string of n bytes, decodes it as utf-8 and strips null bytes"""
@@ -248,6 +250,8 @@ def read_bytes(demo_stream, n):
 
 def read_byte(demo_stream):
     """read unsigned char from the file"""
+    # TODO: change all usages of this to a better named function,
+    # then change the behavior to actually return a byte
     return demo_stream.read('uintle:8')
 
 def read_short(demo_stream):
@@ -367,7 +371,8 @@ def read_varint32(data_stream):
     shift = 0
 
     while True:
-        byte = read_byte(data_stream)
+        byte = read_bytes(data_stream, 1)
+        print(byte)
         if byte == b'':
             raise EOFError()
 
@@ -395,7 +400,7 @@ def read_cmd_header(data_stream):
 
 def read_cmd_info(data_stream):
     """gets data from from a cmd"""
-    demo_cmd_bytes = read_bytes(data_stream, 152)
+    demo_cmd_bytes = ConstBitStream(read_bytes(data_stream, 152))
     demo_cmd_info(demo_cmd_bytes)
 
     # skip of sequence info
@@ -406,12 +411,13 @@ def read_cmd_info(data_stream):
     while len(chunk) != 0:
         cmd = read_varint32(data_stream)
 
-        message_buffer = read_raw_data(data_stream)
+        size = read_int(data_stream)
+        message_buffer = data_stream.read(size)
 
         if DEBUG:
             print('read_cmd_info: handle_netmsg: {}'.format(cmd))
 
-        handle_netmsg(message_buffer)
+        handle_netmsg(message_buffer, size, cmd)
 
 def read_from_buffer(data_bytes):
     """takes a bytesio file and reads a different something"""
@@ -1203,6 +1209,8 @@ def handle_svc_packet_entities(data_stream, size, cmd):
 
 def handle_net_default(data_stream, size, cmd):
     """handles a non-special case, it might be slightly ugly"""
+    # TODO: figure out why svc_game_event_list is supposed to be cmd=30
+    # but is actually cmd=26
     types = [netmessages_public_pb2.CCNETMsg_NOP,
              netmessages_public_pb2.CNETMsg_Disconnect,
              netmessages_public_pb2.CNETMsg_File,
