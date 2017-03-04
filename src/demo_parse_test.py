@@ -394,6 +394,7 @@ def read_cmd_header(data_stream):
     return cmd, tick, player_slot
 
 def read_cmd_info(data_stream):
+    """gets data from from a cmd"""
     demo_cmd_bytes = read_bytes(data_stream, 152)
     demo_cmd_info(demo_cmd_bytes)
 
