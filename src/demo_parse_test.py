@@ -1193,9 +1193,10 @@ def handle_svc_packet_entities(data_stream, size, cmd):
 
 def handle_net_default(data_stream, size, cmd):
     """handles a non-special case, it might be slightly ugly"""
-    # TODO: figure out why svc_game_event_list is supposed to be cmd=30
-    # but is actually cmd=26
-    types = [netmessages_public_pb2.CCNETMsg_NOP,
+    if DEBUG:
+        print('entering print_user_message')
+    #TODO: find a better way of doing this instead of listing it
+    types = [netmessages_public_pb2.CNETMsg_NOP,
              netmessages_public_pb2.CNETMsg_Disconnect,
              netmessages_public_pb2.CNETMsg_File,
              netmessages_public_pb2.CNETMsg_SplitScreenUser,
@@ -1234,13 +1235,14 @@ def handle_net_default(data_stream, size, cmd):
     msg = types[cmd]()
     msg.ParseFromString(read_bytes(data_stream, size))
     if cmd == 30:       # svc game event list
-        # demo.game_event_list should be set here but does not exist
         # TODO: get a demo object and change this to demo.game_event_list
         GAME_EVENT_LIST.MergeFrom(msg)
     demo_msg_print(msg, size)
 
 def handle_netmsg(data_stream, size, cmd):
     """handle the top level of netmsg and svcmsg parsing"""
+    if DEBUG:
+        print('entering handle_netmsg')
     if cmd == 23:   # svc user message
         handle_svc_user_message(data_stream, size, cmd)
     elif cmd == 25:     # svc game event
@@ -1259,20 +1261,26 @@ def handle_netmsg(data_stream, size, cmd):
 def dump_demo_packet(data_stream):
     """deals with some parsing of a demo packet"""
     chunk = read_raw_data(data_stream)
-    while len(chunk) > data_stream.pos:
-        cmd = read_varint32(data_stream)
+    if DEBUG:
+        print('entering dump_demo_packet')
+        print('chunk len: {}'.format(len(chunk)))
+    while len(chunk) > chunk.pos:
+        if DEBUG:
+            print('in loop, chunk len: {}'.format(len(chunk)))
+        cmd = read_varint32(chunk)
 
-        size = read_int(data_stream)
-        message_buffer = data_stream.read(size)
+        size = read_varint32(chunk)
 
         if DEBUG:
-            print('read_cmd_info: handle_netmsg: {}'.format(cmd))
+            print('read_cmd_info: cmd: {} size: {}'.format(cmd, size))
+        
+        message_buffer = chunk.read(size)
 
         handle_netmsg(message_buffer, size, cmd)
 
 def handle_demo_packet(data_table_bytes):
     """parses a data packet"""
-    read_cmd_info(data_table_bytes)
+    cmd_info = read_cmd_info(data_table_bytes)
     read_sequence_info(data_table_bytes)    # result ignored
 
     dump_demo_packet(data_table_bytes)
