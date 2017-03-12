@@ -266,6 +266,10 @@ def read_bit(demo_stream):
     """read a single bit and return it as a bool"""
     return demo_stream.read('bool')
 
+def read_bits(demo_stream, n):
+    """read n bits from the demo_stream"""
+    return demo_stream.read('bits:{}'.format(n))
+
 def read_uchar(demo_stream):
     """read an 1 byte unsigned char"""
     return demo_stream.read('uintle:8')
@@ -1194,7 +1198,7 @@ def handle_svc_packet_entities(data_stream, size, cmd):
 def handle_net_default(data_stream, size, cmd):
     """handles a non-special case, it might be slightly ugly"""
     if DEBUG:
-        print('entering print_user_message')
+        print('entering print_user_message, size: {}'.format(size))
     #TODO: find a better way of doing this instead of listing it
     types = {0 : netmessages_public_pb2.CNETMsg_NOP,
              1 : netmessages_public_pb2.CNETMsg_Disconnect,
@@ -1233,7 +1237,7 @@ def handle_net_default(data_stream, size, cmd):
              34 : 'CSVCMsg_EncryptedData',
              35 : 'CSVCMsg_HltvReplay'}
     msg = types[cmd]()
-    msg.ParseFromString(read_bytes(data_stream, size))
+    msg.ParseFromString(str(bytes(read_bits(data_stream, size))))
     if cmd == 30:       # svc game event list
         # TODO: get a demo object and change this to demo.game_event_list
         GAME_EVENT_LIST.MergeFrom(msg)
