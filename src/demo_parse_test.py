@@ -1198,6 +1198,7 @@ def handle_net_default(data_stream, size, cmd):
     types = [netmessages_public_pb2.CCNETMsg_NOP,
              netmessages_public_pb2.CNETMsg_Disconnect,
              netmessages_public_pb2.CNETMsg_File,
+             netmessages_public_pb2.CNETMsg_SplitScreenUser,
              netmessages_public_pb2.CNETMsg_Tick,
              netmessages_public_pb2.CNETMsg_StringCmd,
              netmessages_public_pb2.CNETMsg_SetConVar,
@@ -1216,14 +1217,20 @@ def handle_net_default(data_stream, size, cmd):
              netmessages_public_pb2.CSVCMsg_FixAngle,
              netmessages_public_pb2.CSVCMsg_CrosshairAngle,
              netmessages_public_pb2.CSVCMsg_BSPDecal,
+             netmessages_public_pb2.CSVCMsg_SplitScreen,
              netmessages_public_pb2.CSVCMsg_UserMessage,
+             netmessages_public_pb2.CSVCMsg_EntityMessage,
              netmessages_public_pb2.CSVCMsg_GameEvent,
              netmessages_public_pb2.CSVCMsg_PacketEntities,
              netmessages_public_pb2.CSVCMsg_TempEntities,
              netmessages_public_pb2.CSVCMsg_Prefetch,
              netmessages_public_pb2.CSVCMsg_Menu,
              netmessages_public_pb2.CSVCMsg_GameEventList,
-             netmessages_public_pb2.CSVCMsg_GetCvarValue]
+             netmessages_public_pb2.CSVCMsg_GetCvarValue,
+             netmessages_public_pb2.CSVCMsg_PaintmapData,
+             netmessages_public_pb2.CSVCMsg_CmdKeyValues,
+             netmessages_public_pb2.CSVCMsg_EncryptedData,
+             netmessages_public_pb2.CSVCMsg_HltvReplay]
     msg = types[cmd]()
     msg.ParseFromString(read_bytes(data_stream, size))
     if cmd == 30:       # svc game event list
