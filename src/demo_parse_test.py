@@ -1237,7 +1237,7 @@ def handle_net_default(data_stream, size, cmd):
              34 : 'CSVCMsg_EncryptedData',
              35 : 'CSVCMsg_HltvReplay'}
     msg = types[cmd]()
-    msg.ParseFromString(str(bytes(read_bits(data_stream, size))))
+    msg.FromString(bytes(read_bytes(data_stream, size)))
     if cmd == 30:       # svc game event list
         # TODO: get a demo object and change this to demo.game_event_list
         GAME_EVENT_LIST.MergeFrom(msg)
@@ -1278,7 +1278,7 @@ def dump_demo_packet(data_stream):
         if DEBUG:
             print('read_cmd_info: cmd: {} size: {}'.format(cmd, size))
         
-        message_buffer = chunk.read(size)
+        message_buffer = chunk.read(size*8)
 
         handle_netmsg(message_buffer, size, cmd)
 
