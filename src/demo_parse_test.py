@@ -1065,7 +1065,7 @@ def parse_string_table_update(data_stream, entries, max_entries,
 def handle_svc_create_string_table(data_stream, size, cmd):
     """handles a packet of type svc_create_string_table"""
     msg = netmessages_public_pb2.CSVCMsg_CreateStringTable()
-    msg.ParseFromString(read_bytes(data_steam, size))
+    msg.ParseFromString(read_bytes(data_stream, size))
     is_user_info = msg.name != "userinfo"
     if DUMP_STRING_TABLES:
         print('CreateStringTable:{}:{}:{}:{}:{}'.format(msg.name,
