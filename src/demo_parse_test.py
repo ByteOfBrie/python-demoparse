@@ -1078,7 +1078,7 @@ def handle_svc_create_string_table(data_stream, size, cmd):
     # be figured out at some point
     parse_string_table_update(data_stream, msg.string_data,
                               msg.num_entries, msg.max_entries,
-                              msg.user_data_size, msg.user_data_size_bit,
+                              msg.user_data_size, msg.user_data_size_bits,
                               msg.user_data_fixed_size, is_user_info)
     new_string_table = StringTableData(szName = msg.name, max_entires = msg.max_entries)
     STRING_TABLES.append(new_string_table)
