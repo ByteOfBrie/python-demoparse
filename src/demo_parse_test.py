@@ -376,7 +376,6 @@ def read_varint32(data_stream):
 
     while True:
         byte = read_bytes(data_stream, 1)
-        print(byte)
         if byte == b'':
             raise EOFError()
 
@@ -1361,6 +1360,7 @@ def main():
     print('Number of ticks: {}'.format(demo_info.ticks))
     print('Number of frames: {}'.format(demo_info.frames))
     print('Tickrate: {}'.format(demo_info.tickrate))
+    print('\n--- END HEADER ---\n')
 
     demo_stream.bytepos = 1072      # skip to the end of the header, beginning of main demo
 
