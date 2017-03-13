@@ -212,124 +212,124 @@ class demo_cmd_info():
         split_t_data = ConstBitStream(read_bytes(data_bytes, 76))
         self.u.append(split_t(split_t_data))
 
-def read_str(demo_stream, n=260):
+def read_str(data_stream, n=260):
     """reads a string of n bytes, decodes it as utf-8 and strips null bytes"""
-    return demo_stream.read('bytes:{}'.format(n)).decode('utf-8').strip('\x00')
+    return data_stream.read('bytes:{}'.format(n)).decode('utf-8').strip('\x00')
 
-def read_int(demo_stream):
+def read_int(data_stream):
     """little endian signed int 32"""
-    return demo_stream.read('intle:32')
+    return data_stream.read('intle:32')
 
-def read_intbe(demo_stream):
+def read_intbe(data_stream):
     """big endian signed int 32"""
-    return demo_stream.read('intbe:32')
+    return data_stream.read('intbe:32'),
 
-def read_uint32(demo_stream):
+def read_uint32(data_stream):
     """little endian unsigned int 32"""
-    return demo_stream.read('uintle:32')
+    return data_stream.read('uintle:32')
 
-def read_uint32be(demo_stream):
+def read_uint32be(data_stream):
     """big endian unsigned int 32"""
-    return demo_stream.read('uintbe:32')
+    return data_stream.read('uintbe:32')
 
-def read_uint64(demo_stream):
+def read_uint64(data_stream):
     """little endian unsigned in 64"""
-    return demo_stream.read('uintle:64')
+    return data_stream.read('uintle:64')
 
-def read_uint64be(demo_stream):
+def read_uint64be(data_stream):
     """big endian unsigned int 64"""
-    return demo_stream.read('uintbe:64')
+    return data_stream.read('uintbe:64')
 
-def read_float(demo_stream):
+def read_float(data_stream):
     """little endian 32 bit float"""
-    return demo_stream.read('floatle:32')
+    return data_stream.read('floatle:32')
 
-def read_bytes(demo_stream, n):
+def read_bytes(data_stream, n):
     """read n bytes from the stream"""
-    return demo_stream.read('bytes:{}'.format(n))
+    return data_stream.read('bytes:{}'.format(n))
 
-def read_byte(demo_stream):
+def read_byte(data_stream):
     """read unsigned char from the file"""
     # TODO: change all usages of this to a better named function,
     # then change the behavior to actually return a byte
-    return demo_stream.read('uintle:8')
+    return data_stream.read('uintle:8')
 
-def read_short(demo_stream):
+def read_short(data_stream):
     """read signed short from the file"""
-    return demo_stream.read('intle:16')
+    return data_stream.read('intle:16')
 
-def read_word(demo_stream):
+def read_word(data_stream):
     """read an unsigned short from the file"""
-    return demo_stream.read('uintle:16')
+    return data_stream.read('uintle:16')
 
-def read_bit(demo_stream):
+def read_bit(data_stream):
     """read a single bit and return it as a bool"""
-    return demo_stream.read('bool')
+    return data_stream.read('bool')
 
-def read_bits(demo_stream, n):
-    """read n bits from the demo_stream"""
-    return demo_stream.read('bits:{}'.format(n))
+def read_bits(data_stream, n):
+    """read n bits from the data_stream"""
+    return data_stream.read('bits:{}'.format(n))
 
-def read_uchar(demo_stream):
+def read_uchar(data_stream):
     """read an 1 byte unsigned char"""
-    return demo_stream.read('uintle:8')
+    return data_stream.read('uintle:8')
 
-def read_ucharbe(demo_stream):
+def read_ucharbe(data_stream):
     """read an 1 byte unsigned big-endian char"""
-    return demo_stream.read('uintbe:8')
+    return data_stream.read('uintbe:8')
 
 
-def read_bool(demo_stream):
+def read_bool(data_stream):
     """reads a entire byte and evaluates it as a bool"""
-    return bool(demo_stream.read(8))
+    return bool(data_stream.read(8))
 
-def read_ulong(demo_stream):
+def read_ulong(data_stream):
     """read unsigned long 32 bits"""
-    return demo_stream.read('uintle:32')
+    return data_stream.read('uintle:32')
 
-def read_ubit_long(demo_stream, n):
+def read_ubit_long(data_stream, n):
     """reads some type of number, not sure how this is supposed to work"""
-    return demo_stream.read('uintle:{}'.format(n*8))
+    return data_stream.read('uintle:{}'.format(n*8))
 
-def read_ubit_var(demo_stream):
+def read_ubit_var(data_stream):
     """reads some type of number, copied from c code"""
-    ret = read_ubit_long(demo_stream, 6)
+    ret = read_ubit_long(data_stream, 6)
     if ret & (16 | 32) == 16:
-        ret = (ret & 15) | (read_ubit_long(demo_stream, 4) << 4)
+        ret = (ret & 15) | (read_ubit_long(data_stream, 4) << 4)
         assert ret >= 16
 
     if ret & (16 | 32) == 32:
-        ret = (ret & 15) | (read_ubit_long(demo_stream, 8) << 4)
+        ret = (ret & 15) | (read_ubit_long(data_stream, 8) << 4)
         assert ret >= 256
 
     if ret & (16 | 32) == 48:
-        ret = (ret & 15) | (read_ubit_long(demo_stream, 32-4) << 4)
+        ret = (ret & 15) | (read_ubit_long(data_stream, 32-4) << 4)
         assert ret >= 4096
 
     return ret
 
-def read_custom_files(demo_stream):
+def read_custom_files(data_stream):
     """read 4 unsigned longs into a list"""
-    return [read_ulong(demo_stream), read_ulong(demo_stream),
-            read_ulong(demo_stream), read_ulong(demo_stream)]
+    return [read_ulong(data_stream), read_ulong(data_stream),
+            read_ulong(data_stream), read_ulong(data_stream)]
 
-def pad_stream(demo_stream, n):
+def pad_stream(data_stream, n):
     """ignore n bits. this function only exists to make bitstring easier
     to replace with another library in the future
     """
-    demo_stream.read('pad:{}'.format(n))
+    data_stream.read('pad:{}'.format(n))
 
-def read_raw_data(demo_stream):
+def read_raw_data(data_stream):
     """read a something (frame?) of bytes from the file"""
-    size = read_int(demo_stream)
+    size = read_int(data_stream)
 
-    return demo_stream.read(size)
+    return data_stream.read(size)
 
-def read_user_cmd(demo_stream):
+def read_user_cmd(data_stream):
     """I don't think this is actually used to collect data"""
-    outgoing = read_int(demo_stream)
+    outgoing = read_int(data_stream)
 
-    read_raw_data(demo_stream)
+    read_raw_data(data_stream)
 
     return outgoing
 
@@ -342,24 +342,24 @@ def IsGoodIPPORTFormat(ip_str):
     except socket.error:
         return False
 
-def get_demo_info(demo_stream):
+def get_demo_info(data_stream):
     """reads the header of a binary stream of a demo file"""
     infos = None
 
-    if demo_stream is None:
+    if data_stream is None:
         raise ValueError('demo_file is None')
 
-    if read_str(demo_stream, 8) == 'HL2DEMO':
+    if read_str(data_stream, 8) == 'HL2DEMO':
         infos = DemoInfo()
-        infos.dem_prot = read_int(demo_stream)
-        infos.net_prot = read_int(demo_stream)
-        infos.host_name = read_str(demo_stream)
-        infos.client_name = read_str(demo_stream)
-        infos.map_name = read_str(demo_stream)
-        infos.gamedir = read_str(demo_stream)
-        infos.time = read_float(demo_stream)
-        infos.ticks = read_int(demo_stream)
-        infos.frames = read_int(demo_stream)
+        infos.dem_prot = read_int(data_stream)
+        infos.net_prot = read_int(data_stream)
+        infos.host_name = read_str(data_stream)
+        infos.client_name = read_str(data_stream)
+        infos.map_name = read_str(data_stream)
+        infos.gamedir = read_str(data_stream)
+        infos.time = read_float(data_stream)
+        infos.ticks = read_int(data_stream)
+        infos.frames = read_int(data_stream)
         infos.tickrate = int(infos.ticks / infos.time)
         if IsGoodIPPORTFormat(infos.host_name):
             infos.demo_type = 0     # RIE
@@ -1288,13 +1288,13 @@ def handle_demo_packet(data_table_bytes):
 
     dump_demo_packet(data_table_bytes)
 
-def dump(demo_stream):
+def dump(data_stream):
     """gets the information from the demo"""
     match_started = False
     demo_finished = False
 
     while not demo_finished:
-        cmd, tick, player_slot = read_cmd_header(demo_stream)
+        cmd, tick, player_slot = read_cmd_header(data_stream)
         
         if DEBUG:
             print('cmd:{}, tick:{}, player_slot:{}'.format(cmd, tick, player_slot))
@@ -1304,12 +1304,12 @@ def dump(demo_stream):
         if cmd == 1:
             #startup packet
             #handled same as tick type 2
-            handle_demo_packet(demo_stream)
+            handle_demo_packet(data_stream)
 
         elif cmd == 2:
             #normal network packet
             #handled same as tick type 1
-            handle_demo_packet(demo_stream)
+            handle_demo_packet(data_stream)
 
         elif cmd == 3:
             #synctick, doesn't seem to do anything
@@ -1318,15 +1318,15 @@ def dump(demo_stream):
         elif cmd == 4:
             #console command, nothing seems to be saved in c++
             #it might be interesting to do something with this at some point
-            buf = read_raw_data(demo_stream)
+            buf = read_raw_data(data_stream)
 
         elif cmd == 5:
-            read_user_cmd(demo_stream)
+            read_user_cmd(data_stream)
 
         elif cmd == 7:
             #stop tick
             demo_finished = True
-            parse_data_table(demo_stream)
+            parse_data_table(data_stream)
 
         elif cmd == 8:
             #custom data, "blob of binary data
@@ -1334,7 +1334,7 @@ def dump(demo_stream):
 
         elif cmd == 9:
             #read a stringtable, somewhat confusing
-            data_table_bytes = read_raw_data(demo_stream)
+            data_table_bytes = read_raw_data(data_stream)
             
             dump_string_tables(data_table_bytes)
 
@@ -1347,8 +1347,8 @@ def main():
         pathtofile = input('path to demo>')
     print('parsing {}'.format(pathtofile))
 
-    demo_stream = ConstBitStream(filename=pathtofile)
-    demo_info = get_demo_info(demo_stream)
+    data_stream = ConstBitStream(filename=pathtofile)
+    demo_info = get_demo_info(data_stream)
 
     print('Demo protocol version: {}'.format(demo_info.dem_prot))
     print('Network protocol version: {}'.format(demo_info.net_prot))
@@ -1362,9 +1362,9 @@ def main():
     print('Tickrate: {}'.format(demo_info.tickrate))
     print('\n--- END HEADER ---\n')
 
-    demo_stream.bytepos = 1072      # skip to the end of the header, beginning of main demo
+    data_stream.bytepos = 1072      # skip to the end of the header, beginning of main demo
 
-    dump(demo_stream)
+    dump(data_stream)
 
 if __name__ == '__main__':
     main()
